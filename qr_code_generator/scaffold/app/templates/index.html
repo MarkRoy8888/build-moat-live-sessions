@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QR Playground</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif; }
+    .badge-q { font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen" x-data="app()" x-init="init()" x-cloak>
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">QR Playground</h1>
+      <p class="text-xs text-slate-500">Q1–Q5 設計選擇 · 實時切換 · 觀察行為差異</p>
+    </div>
+    <button @click="settingsOpen = !settingsOpen"
+            class="text-sm bg-slate-900 hover:bg-slate-700 text-white px-3 py-1.5 rounded-md transition">
+      <span x-text="settingsOpen ? '收起設定' : '⚙️ 系統設定'"></span>
+    </button>
+  </div>
+</header>
+
+<!-- Settings Panel -->
+<section x-show="settingsOpen" x-transition class="bg-white border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-6 py-5">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">System Settings</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <!-- Q2: Token strategy -->
+      <div class="border border-slate-200 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge-q bg-blue-100 text-blue-700">Q2</span>
+          <h3 class="font-semibold text-sm">Token 產生策略</h3>
+        </div>
+        <div class="space-y-1.5 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="strategy" value="random"
+                   :checked="settings.token_strategy === 'random'"
+                   @change="updateSetting('token_strategy', 'random')" />
+            <span><b>random</b> — 純隨機,同 URL 兩次得到不同 token</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="strategy" value="hash_only"
+                   :checked="settings.token_strategy === 'hash_only'"
+                   @change="updateSetting('token_strategy', 'hash_only')" />
+            <span><b>hash_only</b> — 純 SHA-256,撞了直接 422</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="strategy" value="hash_with_nonce"
+                   :checked="settings.token_strategy === 'hash_with_nonce'"
+                   @change="updateSetting('token_strategy', 'hash_with_nonce')" />
+            <span><b>hash_with_nonce</b> — scaffold 預設,撞了 retry</span>
+          </label>
+        </div>
+        <div class="mt-3 flex items-center gap-2 text-sm">
+          <span class="text-slate-600">長度:</span>
+          <template x-for="n in [5,6,7,8]" :key="n">
+            <button @click="updateSetting('token_length', n)"
+                    :class="settings.token_length === n ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'"
+                    class="px-2.5 py-1 rounded text-xs font-medium transition"
+                    x-text="n"></button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Q4: Normalization -->
+      <div class="border border-slate-200 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge-q bg-purple-100 text-purple-700">Q4</span>
+          <h3 class="font-semibold text-sm">URL 正規化模式</h3>
+        </div>
+        <div class="space-y-1.5 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="norm" value="conservative"
+                   :checked="settings.normalization_mode === 'conservative'"
+                   @change="updateSetting('normalization_mode', 'conservative')" />
+            <span><b>conservative</b> — 只動 RFC 安全規則(scheme/hostname 小寫等)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="norm" value="aggressive"
+                   :checked="settings.normalization_mode === 'aggressive'"
+                   @change="updateSetting('normalization_mode', 'aggressive')" />
+            <span><b>aggressive</b> — 整個小寫、升 https、剝 fragment、剝 trailing /</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Q3: Redirect -->
+      <div class="border border-slate-200 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge-q bg-emerald-100 text-emerald-700">Q3</span>
+          <h3 class="font-semibold text-sm">Redirect Status</h3>
+        </div>
+        <div class="space-y-1.5 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="redir" value="302"
+                   :checked="settings.redirect_status === 302"
+                   @change="updateSetting('redirect_status', 302)" />
+            <span><b>302 Found</b> — 每次都過 server,改目標即時生效</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="redir" value="301"
+                   :checked="settings.redirect_status === 301"
+                   @change="updateSetting('redirect_status', 301)" />
+            <span><b>301 Moved Permanently</b> — 瀏覽器永久快取(危險)</span>
+          </label>
+        </div>
+        <div x-show="settings.redirect_status === 301"
+             class="mt-2 text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded p-2">
+          ⚠ 切換到 301 後,瀏覽器會快取轉址規則 — 即使切回 302,**已經掃過的瀏覽器**仍可能看到舊 URL。請用無痕視窗測試。
+        </div>
+      </div>
+
+      <!-- Q5: Gone status -->
+      <div class="border border-slate-200 rounded-lg p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge-q bg-rose-100 text-rose-700">Q5</span>
+          <h3 class="font-semibold text-sm">已刪除/過期回應</h3>
+        </div>
+        <div class="space-y-1.5 text-sm">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="gone" value="410"
+                   :checked="settings.gone_status === 410"
+                   @change="updateSetting('gone_status', 410)" />
+            <span><b>410 Gone</b> — 明確「曾存在,已永久移除」</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="gone" value="404"
+                   :checked="settings.gone_status === 404"
+                   @change="updateSetting('gone_status', 404)" />
+            <span><b>404 Not Found</b> — 模糊化「不存在」(隱藏 namespace)</span>
+          </label>
+        </div>
+      </div>
+
+    </div>
+    <p class="mt-4 text-xs text-slate-500">設定即時套用到後續所有操作。切換後現有 QR 在下次掃描就會看到新行為。</p>
+  </div>
+</section>
+
+<main class="max-w-6xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+  <!-- Create Panel -->
+  <section class="lg:col-span-3 bg-white rounded-lg border border-slate-200 p-5">
+    <h2 class="font-semibold mb-4">建立 QR Code</h2>
+    <label class="block text-sm font-medium text-slate-700">原始 URL</label>
+    <input type="text" x-model="form.url" @input.debounce.300ms="previewUrl()"
+           placeholder="https://Example.com/About"
+           class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+
+    <!-- Live preview -->
+    <div x-show="preview" class="mt-3 text-xs">
+      <template x-if="preview && preview.valid">
+        <div class="bg-emerald-50 border border-emerald-200 rounded p-2.5">
+          <div class="font-mono text-slate-700">
+            <div><span class="text-slate-400">原始:</span> <span x-text="preview.original"></span></div>
+            <div><span class="text-slate-400">正規化:</span> <span class="text-emerald-700 font-semibold" x-text="preview.normalized"></span></div>
+          </div>
+          <template x-if="preview.changes.length">
+            <ul class="mt-1.5 list-disc list-inside text-emerald-700 space-y-0.5">
+              <template x-for="c in preview.changes" :key="c">
+                <li x-text="c"></li>
+              </template>
+            </ul>
+          </template>
+          <div x-show="!preview.changes.length" class="mt-1.5 text-slate-500">無變更</div>
+        </div>
+      </template>
+      <template x-if="preview && !preview.valid">
+        <div class="bg-rose-50 border border-rose-200 text-rose-700 rounded p-2.5" x-text="'❌ ' + preview.error"></div>
+      </template>
+    </div>
+
+    <div class="mt-4 grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium text-slate-700">過期時間(可選)</label>
+        <input type="datetime-local" x-model="form.expires_at"
+               class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700">自訂 alias(可選)</label>
+        <input type="text" x-model="form.custom_alias" placeholder="my-link"
+               class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm" />
+      </div>
+    </div>
+
+    <button @click="createQR()" :disabled="!form.url || creating"
+            class="mt-5 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-medium py-2.5 rounded transition">
+      <span x-text="creating ? '產生中…' : 'Generate QR'"></span>
+    </button>
+
+    <div x-show="createError" class="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2.5" x-text="createError"></div>
+
+  </section>
+
+  <!-- Result Panel -->
+  <section class="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-5">
+    <h2 class="font-semibold mb-4">產生結果</h2>
+    <template x-if="!latest">
+      <p class="text-sm text-slate-400">建立後在此顯示 QR 圖與短網址。</p>
+    </template>
+    <template x-if="latest">
+      <div class="space-y-3">
+        <div class="bg-slate-50 rounded p-3 flex justify-center">
+          <img :src="latest.qr_code_url + '?cb=' + latest.token" class="w-44 h-44" />
+        </div>
+        <div class="text-sm">
+          <div class="text-slate-500 text-xs">Short URL</div>
+          <div class="flex items-center gap-2 mt-0.5">
+            <a :href="latest.short_url" target="_blank"
+               class="font-mono text-blue-600 hover:underline" x-text="latest.short_url"></a>
+            <button @click="copyText(latest.short_url)" class="text-xs text-slate-500 hover:text-slate-800">📋</button>
+          </div>
+        </div>
+        <div class="text-sm">
+          <div class="text-slate-500 text-xs">Token</div>
+          <div class="font-mono text-slate-700" x-text="latest.token"></div>
+        </div>
+        <div class="text-sm">
+          <div class="text-slate-500 text-xs">原網址(已正規化)</div>
+          <div class="font-mono text-slate-700 break-all" x-text="latest.original_url"></div>
+        </div>
+        <div class="pt-2">
+          <a :href="latest.short_url" target="_blank"
+             class="block w-full text-center bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2 rounded transition">
+            🔗 開新分頁測試掃描
+          </a>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  <!-- List Panel -->
+  <section class="lg:col-span-5 bg-white rounded-lg border border-slate-200 p-5">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-semibold">所有 QR Code</h2>
+      <button @click="loadList()" class="text-xs text-slate-500 hover:text-slate-800">↻ 重新整理</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="text-left text-xs uppercase text-slate-500 border-b border-slate-200">
+          <tr>
+            <th class="py-2 pr-3">Token</th>
+            <th class="py-2 pr-3">URL</th>
+            <th class="py-2 pr-3">建立時間</th>
+            <th class="py-2 pr-3">過期</th>
+            <th class="py-2 pr-3">掃描</th>
+            <th class="py-2 pr-3">狀態</th>
+            <th class="py-2 pr-3">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-if="!list.length">
+            <tr><td colspan="7" class="py-6 text-center text-slate-400">還沒有 QR,試試上方 Generate</td></tr>
+          </template>
+          <template x-for="item in list" :key="item.token">
+            <tr class="border-b border-slate-100 hover:bg-slate-50">
+              <td class="py-2 pr-3 font-mono text-xs" x-text="item.token"></td>
+              <td class="py-2 pr-3 max-w-xs truncate" :title="item.original_url" x-text="item.original_url"></td>
+              <td class="py-2 pr-3 text-xs text-slate-500" x-text="fmtDate(item.created_at)"></td>
+              <td class="py-2 pr-3 text-xs text-slate-500" x-text="item.expires_at ? fmtDate(item.expires_at) : '—'"></td>
+              <td class="py-2 pr-3 text-center" x-text="item.scan_count"></td>
+              <td class="py-2 pr-3">
+                <span x-show="item.is_deleted" class="text-xs bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">deleted</span>
+                <span x-show="!item.is_deleted && isExpired(item)" class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">expired</span>
+                <span x-show="!item.is_deleted && !isExpired(item)" class="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">active</span>
+              </td>
+              <td class="py-2 pr-3">
+                <div class="flex flex-wrap gap-1.5">
+                  <a :href="'/r/' + item.token" target="_blank" class="text-xs text-blue-600 hover:underline">Test</a>
+                  <button @click="editUrl(item)" class="text-xs text-slate-600 hover:text-slate-900">Edit URL</button>
+                  <button @click="setExpiry(item)" class="text-xs text-slate-600 hover:text-slate-900">TTL</button>
+                  <button @click="deleteQR(item)" x-show="!item.is_deleted" class="text-xs text-rose-600 hover:text-rose-800">Delete</button>
+                  <button @click="showAnalytics(item)" class="text-xs text-slate-600 hover:text-slate-900">Stats</button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Analytics modal -->
+    <div x-show="analytics" x-cloak @click.self="analytics = null"
+         class="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-lg p-5 max-w-md w-full">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-semibold">Analytics — <span class="font-mono text-sm" x-text="analytics?.token"></span></h3>
+          <button @click="analytics = null" class="text-slate-400 hover:text-slate-700">✕</button>
+        </div>
+        <div class="text-3xl font-bold" x-text="analytics?.total_scans || 0"></div>
+        <div class="text-xs text-slate-500 mb-3">總掃描次數</div>
+        <template x-if="analytics?.scans_by_day?.length">
+          <div class="space-y-1 text-sm">
+            <template x-for="d in analytics.scans_by_day" :key="d.date">
+              <div class="flex justify-between border-b border-slate-100 py-1">
+                <span x-text="d.date"></span>
+                <span class="font-medium" x-text="d.count"></span>
+              </div>
+            </template>
+          </div>
+        </template>
+        <template x-if="!analytics?.scans_by_day?.length">
+          <p class="text-sm text-slate-400">尚無掃描紀錄</p>
+        </template>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer class="max-w-6xl mx-auto px-6 py-6 text-xs text-slate-400">
+  <p>切設定後想立刻看到差異:點 Test 開新分頁。301 模式請務必用無痕視窗才看得出快取效應。</p>
+</footer>
+
+<script>
+function app() {
+  return {
+    settingsOpen: false,
+    settings: { token_length: 7, token_strategy: 'hash_with_nonce', normalization_mode: 'aggressive', redirect_status: 302, gone_status: 410 },
+    form: { url: '', expires_at: '', custom_alias: '' },
+    preview: null,
+    latest: null,
+    list: [],
+    creating: false,
+    createError: '',
+    analytics: null,
+
+    async init() {
+      await this.loadSettings();
+      await this.loadList();
+    },
+
+    async loadSettings() {
+      const r = await fetch('/api/settings');
+      this.settings = await r.json();
+    },
+
+    async updateSetting(key, value) {
+      const body = {};
+      body[key] = value;
+      const r = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (r.ok) {
+        this.settings = await r.json();
+        if (this.form.url) this.previewUrl();
+      } else {
+        const err = await r.json();
+        alert('設定失敗: ' + (err.detail || r.statusText));
+      }
+    },
+
+    async previewUrl() {
+      if (!this.form.url || this.form.url.trim().length < 4) { this.preview = null; return; }
+      const r = await fetch('/api/preview', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url: this.form.url })
+      });
+      this.preview = await r.json();
+    },
+
+    async createQR() {
+      this.creating = true;
+      this.createError = '';
+      try {
+        const body = { url: this.form.url };
+        if (this.form.expires_at) body.expires_at = new Date(this.form.expires_at).toISOString();
+        if (this.form.custom_alias) body.custom_alias = this.form.custom_alias;
+        const r = await fetch('/api/qr/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) {
+          const err = await r.json();
+          this.createError = err.detail || ('HTTP ' + r.status);
+          return;
+        }
+        this.latest = await r.json();
+        this.form.custom_alias = '';
+        await this.loadList();
+      } catch (e) {
+        this.createError = e.message;
+      } finally {
+        this.creating = false;
+      }
+    },
+
+    async loadList() {
+      const r = await fetch('/api/qr');
+      this.list = await r.json();
+    },
+
+    async editUrl(item) {
+      const newUrl = prompt('新的目標 URL:', item.original_url);
+      if (!newUrl || newUrl === item.original_url) return;
+      const r = await fetch('/api/qr/' + item.token, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ url: newUrl })
+      });
+      if (!r.ok) {
+        const err = await r.json();
+        alert('更新失敗: ' + (err.detail || r.statusText));
+        return;
+      }
+      await this.loadList();
+    },
+
+    async setExpiry(item) {
+      const v = prompt('過期時間 (YYYY-MM-DD HH:MM,留空則用 1 分鐘後測試,輸入 - 表示移除過期):',
+                       item.expires_at ? item.expires_at.slice(0, 16).replace('T', ' ') : '');
+      if (v === null) return;
+      let expires_at = null;
+      if (v === '-') expires_at = null;
+      else if (!v.trim()) expires_at = new Date(Date.now() + 60000).toISOString();
+      else {
+        const d = new Date(v.replace(' ', 'T'));
+        if (isNaN(d.getTime())) { alert('日期格式錯'); return; }
+        expires_at = d.toISOString();
+      }
+      const body = expires_at === null ? {} : { expires_at };
+      const r = await fetch('/api/qr/' + item.token, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) {
+        alert('失敗');
+        return;
+      }
+      await this.loadList();
+    },
+
+    async deleteQR(item) {
+      if (!confirm('確定刪除 ' + item.token + ' ?')) return;
+      await fetch('/api/qr/' + item.token, { method: 'DELETE' });
+      await this.loadList();
+    },
+
+    async showAnalytics(item) {
+      const r = await fetch('/api/qr/' + item.token + '/analytics');
+      if (!r.ok) { alert('無法載入'); return; }
+      this.analytics = await r.json();
+    },
+
+    copyText(t) {
+      navigator.clipboard.writeText(t);
+    },
+
+    fmtDate(s) {
+      if (!s) return '';
+      try { return new Date(s).toLocaleString('zh-TW', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+      catch { return s; }
+    },
+
+    isExpired(item) {
+      return item.expires_at && new Date(item.expires_at).getTime() < Date.now();
+    },
+  };
+}
+</script>
+
+</body>
+</html>
