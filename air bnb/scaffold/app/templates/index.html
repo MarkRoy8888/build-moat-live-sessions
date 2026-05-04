@@ -410,8 +410,15 @@
           只有一個會拿到 affected_rows == nights → <span class="ok">一個成功 + 一個 rejected</span> ✓<br>
           <br>
           <b>naive 模式</b>(教學用,故意有破綻):先 SELECT 看是否可訂,再 UPDATE。中間有 race window。
-          在 PostgreSQL 裡會雙雙成功 → double booking。在 SQLite 因為 DB-level write lock 仍會擋,
-          但你會看到第二筆是 <code>DB conflict</code> 而非優雅的 <code>Dates not available</code> — 那就是缺乏 conditional 保護的破綻。<br>
+          在 PostgreSQL 裡會雙雙成功 → double booking。<br>
+          <br>
+          <b>⚠ 為什麼 naive race 會自動加 200ms 延遲?</b><br>
+          SQLite 對寫入有 database-level lock,加上每個 SQL < 1ms,naive 的 race window 在實務上幾乎無法對撞 —
+          通常 A 跑完 commit 後 B 才開始 SELECT,B 自然看到 reserved 然後 reject,看起來跟 logical 一樣 (假象)。<br>
+          所以 UI 在 naive 模式時自動帶 <code>?delay_ms=200</code>,在 SELECT 跟 UPDATE 中間 sleep 200ms,模擬真實系統的網路 / 處理延遲,讓 race window 變大、對撞穩定發生。
+          這時候你會看到 <span class="fail">DOUBLE BOOKING DETECTED</span> 警告 — 兩個 booking 都成立但 inventory.holder 只記得最後一個寫入的人,另一個 booking 變成孤兒 (已付款卻訂不到房)。<br>
+          <br>
+          <b>logical 模式不需要 delay</b>,因為它的 conditional UPDATE 是 atomic,即使加 delay 也不會壞。<br>
           <br>
           <b>重新測之前</b>:按 <b>Cancel any holds</b> 把這個房上面所有未完成的 reservation 釋放掉。
         </div>
@@ -809,19 +816,19 @@
     }
 
     async function loadHomesForCity(city, selectId) {
-      // search the next ~20 days for available homes in this city
-      const fmt = (d) => d.toISOString().slice(0, 10);
-      const t = new Date();
-      const start = fmt(new Date(t.getTime() + 86400000 * 1));
-      const end = fmt(new Date(t.getTime() + 86400000 * 2));
-      const r = await api(`/home/search?city=${encodeURIComponent(city)}&startDate=${start}&endDate=${end}&pageSize=50`);
+      // List ALL homes in this city, regardless of booking status.
+      // Using /home/search would filter out homes whose target dates are
+      // already reserved/booked, leaving the dropdown progressively emptier
+      // after each demo reservation.
+      const r = await api(`/api/homes?city=${encodeURIComponent(city)}`);
       const sel = document.getElementById(selectId);
-      if (r.ok && r.json.results.length) {
-        sel.innerHTML = r.json.results.map(h =>
+      const homes = r.ok && Array.isArray(r.json) ? r.json : [];
+      if (homes.length) {
+        sel.innerHTML = homes.map(h =>
           `<option value="${h.home_id}">${h.home_id} · ${h.address}</option>`
         ).join('');
       } else {
-        sel.innerHTML = `<option value="">(no homes — try Admin tab to seed)</option>`;
+        sel.innerHTML = `<option value="">(${city} 沒有房源 — 去 Admin tab 按 Seed)</option>`;
       }
     }
 
@@ -986,20 +993,61 @@
         const homeId = document.getElementById('q2-home').value;
         const start = document.getElementById('q2-start').value;
         const end = document.getElementById('q2-end').value;
-        if (!homeId) return alert('Pick a home');
-        const body = (uid) => JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: uid });
+        if (!homeId) return alert('請先在上面選 City + Home');
+
+        // Look up current concurrency mode to decide whether to inject delay.
+        // SQLite serializes writes so fast that a real race never collides
+        // without a forced sleep between SELECT and UPDATE. logical mode
+        // doesn't need delay (its conditional UPDATE is race-free anyway).
+        const settingsR = await api('/api/settings');
+        const isNaive = settingsR.json?.concurrency_mode === 'naive';
+        const delayMs = isNaive ? 200 : 0;
+        const url = `/home/book${delayMs ? `?delay_ms=${delayMs}` : ''}`;
+
+        const body = (uid) => JSON.stringify({
+          home_id: homeId, start_date: start, end_date: end, user_id: uid,
+        });
         const [rA, rB] = await Promise.all([
-          api('/home/book', { method: 'POST', body: body('U_A') }),
-          api('/home/book', { method: 'POST', body: body('U_B') }),
+          api(url, { method: 'POST', body: body('U_A') }),
+          api(url, { method: 'POST', body: body('U_B') }),
         ]);
+        const tagsFor = (r) => {
+          const t = [];
+          if (delayMs) t.push(`+${delayMs}ms demo delay`);
+          if (r.json?.status === 'reserved') t.push('RESERVED ✓');
+          if (r.json?.status === 'rejected') t.push('REJECTED');
+          return t;
+        };
         const log = (slot, r) => logTo(`q2-log-${slot}`, `RESERVE ${homeId} ${start}→${end}`, {
           elapsed_ms: r.json?.elapsed_ms,
           ok: r.ok && r.json?.status !== 'rejected',
+          tags: tagsFor(r),
           detail: `status=${r.json?.status} mode=${r.json?.concurrency_mode || ''} — ${r.json?.detail || ''}`,
           body: r.json,
         });
         log('a', rA);
         log('b', rB);
+
+        // For naive: surface the double-booking evidence by reading inventory
+        // for the same dates and showing whose holder ended up there.
+        if (isNaive && rA.json?.status === 'reserved' && rB.json?.status === 'reserved') {
+          const inv = await api(`/api/inventory/${homeId}`);
+          const nightRows = (inv.json || []).filter(x => x.date >= start && x.date <= end);
+          const winnerHolder = nightRows[0]?.holder || '?';
+          const loserBooking = (rA.json.booking_id === winnerHolder ? rB : rA).json.booking_id;
+          const winnerLabel = winnerHolder === rA.json.booking_id ? 'A' : 'B';
+          const orphanLabel = winnerLabel === 'A' ? 'B' : 'A';
+          logTo('q2-log-a', '⚠ DOUBLE BOOKING DETECTED', {
+            elapsed_ms: 0,
+            ok: false,
+            detail: `兩個 booking 都成立! 但 inventory.holder 只記得 ${winnerLabel} (${winnerHolder}),${orphanLabel} 的 booking ${loserBooking} 變成孤兒 — 系統實際只能服務 ${winnerLabel},${orphanLabel} 已付款卻訂不到`,
+          });
+          logTo('q2-log-b', '⚠ DOUBLE BOOKING DETECTED', {
+            elapsed_ms: 0,
+            ok: false,
+            detail: `同上 — naive 設計的真實後果`,
+          });
+        }
         Admin.refreshBookings();
       },
       async cancelAll() {

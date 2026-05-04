@@ -106,14 +106,33 @@ def http_get_home(home_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/home/book", response_model=BookResponse)
-def http_book(req: BookRequest, db: Session = Depends(get_db)):
+def http_book(
+    req: BookRequest,
+    delay_ms: int = Query(
+        0,
+        ge=0,
+        le=2000,
+        description=(
+            "DEMO ONLY. Inserts an artificial sleep between SELECT and UPDATE "
+            "in naive concurrency mode, to widen the race window so two "
+            "concurrent reservations reliably collide. Has no effect in "
+            "logical mode. Real production should never set this."
+        ),
+    ),
+    db: Session = Depends(get_db),
+):
     home = db.get(Home, req.home_id)
     if home is None:
         raise HTTPException(404, "Home not found")
 
     t0 = perf_counter()
     booking, reason = try_reserve(
-        db, req.home_id, req.user_id, req.start_date, req.end_date
+        db,
+        req.home_id,
+        req.user_id,
+        req.start_date,
+        req.end_date,
+        artificial_delay_ms=delay_ms,
     )
     elapsed_ms = (perf_counter() - t0) * 1000
 
@@ -210,6 +229,22 @@ def http_list_bookings(db: Session = Depends(get_db)):
             "created_at": b.created_at.isoformat() if b.created_at else None,
         }
         for b in bookings
+    ]
+
+
+@router.get("/api/homes")
+def http_list_homes_by_city(city: str, db: Session = Depends(get_db)):
+    """List all homes in a city, regardless of availability.
+
+    Q4/Q5/Q1 home dropdowns need to show every house even after some get
+    reserved, otherwise the UI runs out of options after a few demo runs.
+    """
+    rows = (
+        db.query(Home).filter(Home.city == city).order_by(Home.id).limit(200).all()
+    )
+    return [
+        {"home_id": h.id, "city": h.city, "address": h.address, "type": h.type}
+        for h in rows
     ]
 
 
