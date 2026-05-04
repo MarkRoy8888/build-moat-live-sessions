@@ -314,35 +314,79 @@
     <!-- ==================== Q1 ==================== -->
     <section class="tab active" id="tab-q1">
       <div class="question">
-        <h2>Q1 · Inventory Schema — 為什麼預先生成「每天一筆」?</h2>
-        <p><b>問題</b>：未來 12 個月每個房的可訂日期,要怎麼存?</p>
-        <p><b>本系統的選擇</b>:每個房預先生成 N 天的 row,每筆 = <code>(home_id, date, status)</code>。
-        訂房 5 天 = UPDATE 5 筆 row。換來的好處是搜尋變成單純的 <code>WHERE city=? AND date BETWEEN ? AND ? AND status='available'</code>,
-        可以被普通 B-tree compound index 一次 seek 完成。</p>
-        <div class="observe"><b>怎麼測:</b><br>
-          1. 選一個城市 → 從下拉選一個房<br>
-          2. 按 <b>Show inventory rows</b><br>
-          3. 你會看到該房未來 30 天的 inventory rows,每一天都有獨立的一筆,status 都是 available<br>
+        <h2>Q1 · Inventory Schema — Per-day rows vs Range rows,哪個快?</h2>
+        <p><b>問題</b>：同一個業務需求「找 Honolulu 在某 N 天內全部可訂的房」,兩種 schema 都做得到,但搜尋速度差很多。</p>
+        <p><b>對比兩種模型:</b></p>
+        <table style="width:100%; font-size:12px; border-collapse:collapse; margin-top:6px;">
+          <tr style="background:var(--code-bg);">
+            <th style="padding:6px 10px; text-align:left;">維度</th>
+            <th style="padding:6px 10px; text-align:left;">A · Per-day rows (本系統選擇)</th>
+            <th style="padding:6px 10px; text-align:left;">B · Range rows (替代方案)</th>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px;">Schema</td>
+            <td style="padding:6px 10px;"><code>inventory(home_id, date, status)</code></td>
+            <td style="padding:6px 10px;"><code>bookings(home_id, start, end, status)</code></td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px;">12 個月 1 個房</td>
+            <td style="padding:6px 10px;">365 筆預先 INSERT</td>
+            <td style="padding:6px 10px;">0 筆(空表 = 全可訂)</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px;">查「N 天全可訂」</td>
+            <td style="padding:6px 10px;">range scan + GROUP BY HAVING COUNT (B-tree 一次 seek)</td>
+            <td style="padding:6px 10px;">NOT EXISTS overlap subquery (B-tree 結構性無能,2 欄位 range 比較)</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 10px;">儲存成本</td>
+            <td style="padding:6px 10px;">高 (N 房 × 365 天)</td>
+            <td style="padding:6px 10px;">低</td>
+          </tr>
+        </table>
+        <div class="observe" style="margin-top:10px;"><b>怎麼測:</b><br>
+          1. 按下方 <b>Run comparison</b> — 系統會跑兩種 SQL 各 N 次,給你 ms 對照<br>
+          2. 如果 bookings 表太空 (寫入測試前),會自動補 50 筆假 booking 進 bookings 表,讓 range query 有東西要 overlap-check<br>
+          3. 看下方對照,「贏家」會被標出來<br>
           <br>
-          <b>觀察重點:</b>所有 row 結構相同,差別只在 status。
-          搜尋只要在 inventory 表上做 range scan + COUNT,DB 跑得超快。
-          如果改用 range 模型 (只在被訂時 INSERT 一筆 <code>(home_id, start, end)</code>),儲存省了,但搜尋變成「找 N 個 home 都沒有 overlapping booking」 — B-tree 完全無能。
+          <b>觀察:</b>小資料下 A 和 B 都很快,差距通常在 0.1-2ms。
+          資料越大,B 的 NOT EXISTS overlap 會比 A 的 range scan 慢很多倍,
+          因為 <code>start_date < end AND end_date > start</code> 是兩欄位 range 比較,B-tree 結構性不擅長。
+          PostgreSQL 要用 GiST + tsrange 才能加速,SQLite/MySQL 沒救。
         </div>
       </div>
 
       <div class="panel">
-        <h3>看某個房的 inventory 長什麼樣</h3>
+        <h3>① 跑對比:per-day vs range,看哪個 ms 比較低</h3>
         <div class="row">
           <div>
             <label>城市 (City)</label>
             <select id="q1-city"></select>
           </div>
           <div>
+            <label>查詢的日期跨度 (天)</label>
+            <input type="number" id="q1-nights" min="1" max="30" value="5" />
+          </div>
+          <div>
+            <label>每種策略跑幾次</label>
+            <input type="number" id="q1-runs" min="5" max="500" value="50" />
+          </div>
+          <div style="display:flex; align-items:end;">
+            <button onclick="Q1.compare()">Run comparison</button>
+          </div>
+        </div>
+        <div id="q1-compare-out"></div>
+      </div>
+
+      <div class="panel">
+        <h3>② 順便看 inventory 長什麼樣 (per-day rows 結構)</h3>
+        <div class="row">
+          <div>
             <label>房源 (Home)</label>
             <select id="q1-home"></select>
           </div>
           <div style="display:flex; align-items:end;">
-            <button onclick="Q1.show()">Show inventory rows</button>
+            <button class="secondary" onclick="Q1.show()">Show inventory rows</button>
           </div>
         </div>
         <div id="q1-out"></div>
@@ -594,6 +638,7 @@
           <button class="secondary" onclick="Q4.replayPay()">↺ Replay Confirm (同一個 key)</button>
           <button class="danger" onclick="Q4.cancel()">✗ Cancel (釋放庫存)</button>
           <button class="secondary" onclick="Q4.peekInventory()">👀 偷看 inventory rows</button>
+          <button class="secondary" onclick="Q4._resetState()">🔄 Reset Q4 (清掉當前 booking,重來)</button>
         </div>
         <div id="q4-current"></div>
       </div>
@@ -860,7 +905,7 @@
     const Q1 = {
       async show() {
         const homeId = document.getElementById('q1-home').value;
-        if (!homeId) return alert('Pick a home');
+        if (!homeId) return alert('請先在上面選一個城市,讓我載入房源清單,然後從這裡選一個房');
         const r = await api(`/api/inventory/${homeId}`);
         const rows = r.json || [];
         const html = `<table class="inv-table"><thead><tr>
@@ -871,9 +916,64 @@
           <td>${x.holder || '-'}</td>
           <td>${x.expires_at || '-'}</td>
         </tr>`).join('')}</tbody></table>
-        <div class="help">${rows.length} rows shown (max 60). Each row = one (home_id, date) tuple.</div>`;
+        <div class="help">共 ${rows.length} 筆 (最多顯示 60 筆)。每一 row 就是一個 <code>(home_id, date)</code> 對。</div>`;
         document.getElementById('q1-out').innerHTML = html;
-      }
+      },
+
+      async compare() {
+        const city = document.getElementById('q1-city').value;
+        const nights = parseInt(document.getElementById('q1-nights').value) || 5;
+        const runs = parseInt(document.getElementById('q1-runs').value) || 50;
+        const out = document.getElementById('q1-compare-out');
+        out.innerHTML = '<em>跑兩個 SQL 對比中...會自動補測試資料,首次可能 1-3 秒。</em>';
+        const r = await api(`/api/q1/compare?city=${encodeURIComponent(city)}&nights=${nights}&runs=${runs}`, { method: 'POST' });
+        if (!r.ok) {
+          out.innerHTML = `<em>失敗:${JSON.stringify(r.json)}</em>`;
+          return;
+        }
+        const j = r.json;
+        const winA = j.winner === 'per_day';
+        const winB = j.winner === 'range';
+        const slowerLabel = winA ? 'B (range)' : 'A (per-day)';
+        const fasterLabel = winA ? 'A (per-day)' : 'B (range)';
+
+        const renderCard = (title, color, data, isWinner) => `
+          <div style="flex:1; border:2px solid ${isWinner ? 'var(--ok)' : 'var(--border)'}; border-radius:8px; padding:12px; background:${isWinner ? '#f0fdf4' : 'white'};">
+            <div style="font-weight:600; color:${color}; font-size:13px;">${title} ${isWinner ? '🏆' : ''}</div>
+            <div style="font-size:24px; font-weight:700; color:#111; margin:8px 0;">
+              ${data.avg_ms} <span style="font-size:13px; color:var(--muted);">ms 平均</span>
+            </div>
+            <div style="font-size:11.5px; color:var(--muted);">
+              min ${data.min_ms} ms · max ${data.max_ms} ms · 共跑 ${j.runs_per_query} 次<br>
+              回傳 ${data.result_count} 個 home
+            </div>
+            <details style="margin-top:8px;">
+              <summary style="font-size:11px;">SQL</summary>
+              <pre style="background:var(--code-bg); padding:6px; border-radius:3px; font-size:10.5px; margin:4px 0 0 0; white-space:pre-wrap;">${data.sql}</pre>
+            </details>
+          </div>
+        `;
+
+        const ratio = j.ratio;
+        const verdict = winA
+          ? `🏆 <b>Per-day rows 贏</b> — 比 range 快 <b>${ratio}×</b>。理由:per-day 的 GROUP BY HAVING COUNT 是 B-tree 一次 seek 完成的範圍掃描;range 的 NOT EXISTS overlap 在 SQLite 上只能逐筆 filter。`
+          : winB
+          ? `🏆 <b>Range rows 贏</b> — 比 per-day 快 <b>${ratio}×</b>。<br><b>但這是小資料的假象</b>:bookings 表只有 ${j.bookings_in_db} 筆,overlap 檢查的工作量小;當 bookings 增長到數萬筆,per-day 的 range scan 會大幅領先。`
+          : `兩者差不多`;
+
+        out.innerHTML = `
+          <div style="display:flex; gap:12px; margin-top:8px;">
+            ${renderCard('A · Per-day rows', 'var(--user-a)', j.per_day, winA)}
+            ${renderCard('B · Range rows', 'var(--user-b)', j.range, winB)}
+          </div>
+          <div style="margin-top:12px; padding:10px 14px; background:#fef3c7; border-radius:4px; font-size:13px;">
+            <b>結論:</b>${verdict}
+          </div>
+          <div class="help" style="margin-top:6px;">
+            參數:city=${j.city}, ${j.start} → ${j.end} (${j.nights} 晚), 每種跑 ${j.runs_per_query} 次, bookings 表共 ${j.bookings_in_db} 筆 (含 ${j.seeded_demo_bookings} 筆自動補的 demo 資料)
+          </div>
+        `;
+      },
     };
     document.getElementById('q1-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q1-home'));
 
@@ -995,55 +1095,83 @@
         await loadHomesForCity(document.getElementById('q4-city').value, 'q4-home');
       },
 
-      _setStep(activeStep, doneSteps = []) {
+      // 由 booking.status 自動推導 pipeline 顯示。
+      // reserved -> 第 1 格 active
+      // paid     -> 第 1 格 done, 第 2 格 active
+      // booked   -> 1+2+3 全 done, 第 4 格 active
+      // null/rejected -> 全部 reset
+      _renderPipeline(status) {
+        const order = ['reserved', 'paid', 'booked', 'done'];
+        let activeIdx = order.indexOf(status);
+        if (status === 'booked') activeIdx = 3;
         document.querySelectorAll('#q4-pipeline .pipe-step').forEach(el => {
           el.classList.remove('active', 'done');
-          if (doneSteps.includes(el.dataset.step)) el.classList.add('done');
-          if (el.dataset.step === activeStep) el.classList.add('active');
+          const stepIdx = order.indexOf(el.dataset.step);
+          if (activeIdx < 0) return;
+          if (stepIdx < activeIdx) el.classList.add('done');
+          else if (stepIdx === activeIdx) el.classList.add('active');
         });
       },
 
       _renderCurrent(b) {
-        if (!b) {
-          document.getElementById('q4-current').innerHTML = '<div class="help">No booking yet. Click <b>Reserve</b>.</div>';
+        const el = document.getElementById('q4-current');
+        if (!b || !b.booking_id) {
+          el.innerHTML = '<div class="help" style="margin-top:8px;">尚無 booking。先選好房 + 日期,按 <b>1️⃣ Reserve</b> 開始。</div>';
           return;
         }
-        document.getElementById('q4-current').innerHTML = `
-          <div class="stats-card">booking_id <b>${b.booking_id}</b></div>
-          <div class="stats-card">status ${statusPill(b.status)}</div>
-          ${b.expires_at ? `<div class="stats-card">expires <b>${b.expires_at.replace('T',' ').slice(0,19)}</b></div>` : ''}
+        const ttlBadge = b.expires_at
+          ? `<div class="stats-card">expires_at <b>${b.expires_at.replace('T',' ').slice(0,19)}</b></div>`
+          : '';
+        const keyBadge = this.idempotencyKey
+          ? `<div class="stats-card">idem_key <b>${this.idempotencyKey}</b></div>`
+          : '';
+        el.innerHTML = `
+          <div style="margin-top:8px;">
+            <div class="stats-card">booking_id <b>${b.booking_id}</b></div>
+            <div class="stats-card">status ${statusPill(b.status)}</div>
+            ${ttlBadge}
+            ${keyBadge}
+          </div>
         `;
+      },
+
+      _resetState() {
+        this.bookingId = null;
+        this.idempotencyKey = null;
+        this._renderPipeline(null);
+        this._renderCurrent(null);
       },
 
       async reserve() {
         const homeId = document.getElementById('q4-home').value;
         const start = document.getElementById('q4-start').value;
         const end = document.getElementById('q4-end').value;
-        if (!homeId) return alert('Pick a home');
+        if (!homeId) return alert('請先選一個 City + Home');
         const r = await api('/home/book', {
           method: 'POST',
           body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_Q4' }),
         });
-        const j = r.json;
+        const j = r.json || {};
         if (r.ok && j.booking_id) {
           this.bookingId = j.booking_id;
-          this.idempotencyKey = null;
-          this._setStep('reserved');
+          this.idempotencyKey = null;  // new booking, fresh key
+          this._renderPipeline('reserved');
         } else {
-          this._setStep(null);
+          this._renderPipeline(null);
         }
         this._renderCurrent(j);
         logTo('q4-log', '1️⃣ RESERVE', {
           elapsed_ms: j.elapsed_ms,
-          ok: r.ok && j.status !== 'rejected',
-          detail: `status=${j.status} ${j.detail || ''}`,
+          ok: r.ok && j.status === 'reserved',
+          detail: `status=${j.status || 'error'} ${j.detail || ''}`,
           body: j,
         });
         Admin.refreshBookings();
+        await Q4.peekInventory();
       },
 
       async confirmPay() {
-        if (!this.bookingId) return alert('Reserve first');
+        if (!this.bookingId) return alert('請先按 1️⃣ Reserve');
         if (!this.idempotencyKey) {
           this.idempotencyKey = 'evt_' + Math.random().toString(36).slice(2, 10);
         }
@@ -1051,89 +1179,109 @@
           method: 'POST',
           body: JSON.stringify({ idempotency_key: this.idempotencyKey }),
         });
-        const j = r.json;
+        const j = r.json || {};
         const tags = [`key=${this.idempotencyKey}`];
         if (j.idempotent_replay) tags.push('IDEMPOTENT REPLAY');
-        if (j.status === 'paid' || j.status === 'booked') {
-          this._setStep(j.status, ['reserved']);
-        }
+        if (j.status) this._renderPipeline(j.status);
         this._renderCurrent(j);
-        logTo('q4-log', '2️⃣ CONFIRM PAY', {
+        logTo('q4-log', '2️⃣ CONFIRM PAY (Stripe ack → paid)', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
           tags,
-          detail: `status=${j.status}`,
+          detail: `status=${j.status} (注意:inventory 還是 reserved! 按 👀 Peek 確認)`,
           body: j,
         });
         Admin.refreshBookings();
+        await Q4.peekInventory();
       },
 
       async replayPay() {
-        if (!this.bookingId || !this.idempotencyKey) return alert('Need a paid booking with a key first');
+        if (!this.bookingId || !this.idempotencyKey) {
+          return alert('需要先 Reserve + Confirm Pay,才有 idempotency key 可以 replay');
+        }
         const r = await api(`/home/book/${this.bookingId}/confirm`, {
           method: 'POST',
           body: JSON.stringify({ idempotency_key: this.idempotencyKey }),
         });
-        const j = r.json;
+        const j = r.json || {};
         const tags = [`key=${this.idempotencyKey}`];
-        if (j.idempotent_replay) tags.push('IDEMPOTENT REPLAY');
+        if (j.idempotent_replay) tags.push('IDEMPOTENT REPLAY ✓');
+        if (j.status) this._renderPipeline(j.status);
         this._renderCurrent(j);
-        logTo('q4-log', '↺ REPLAY (same key)', {
+        logTo('q4-log', '↺ REPLAY CONFIRM (同一個 key)', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
           tags,
-          detail: `status=${j.status}`,
+          detail: j.idempotent_replay
+            ? `status=${j.status} ← 第二次 webhook 進來,系統認得 key,直接回上次結果,沒有重複處理`
+            : `status=${j.status} (idempotency 可能被關掉了,或這是第一次)`,
           body: j,
         });
       },
 
       async finalize() {
-        if (!this.bookingId) return alert('Reserve first');
+        if (!this.bookingId) return alert('請先按 1️⃣ Reserve');
         const r = await api(`/home/book/${this.bookingId}/finalize`, { method: 'POST' });
-        const j = r.json;
-        if (j.status === 'booked') {
-          this._setStep('done', ['reserved', 'paid', 'booked']);
-        }
+        const j = r.json || {};
+        if (j.status) this._renderPipeline(j.status);
         this._renderCurrent(j);
-        logTo('q4-log', '3️⃣ FINALIZE', {
+        logTo('q4-log', '3️⃣ FINALIZE (paid → booked, inventory 真的更新)', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
           detail: `status=${j.status}`,
           body: j,
         });
         Admin.refreshBookings();
+        await Q4.peekInventory();
       },
 
       async cancel() {
-        if (!this.bookingId) return;
+        if (!this.bookingId) return alert('沒有 booking 可以 cancel');
         const r = await api(`/home/book/${this.bookingId}/cancel`, { method: 'POST' });
-        const j = r.json;
-        this._setStep(null);
-        this._renderCurrent(j);
-        logTo('q4-log', '✗ CANCEL', {
+        const j = r.json || {};
+        logTo('q4-log', '✗ CANCEL (釋放庫存)', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
           detail: `status=${j.status}`,
           body: j,
         });
+        // 取消後重置 UI 讓你可以重來
+        this._resetState();
         Admin.refreshBookings();
+        await Q4.peekInventory();
       },
 
       async peekInventory() {
         const homeId = document.getElementById('q4-home').value;
-        if (!homeId) return alert('Pick a home');
+        if (!homeId) return;
         const r = await api(`/api/inventory/${homeId}`);
         const rows = r.json || [];
+        // 只顯示「跟我的 booking 日期相關」的部分,以及附近幾天
+        const start = document.getElementById('q4-start').value;
+        const end = document.getElementById('q4-end').value;
+        const visible = rows.filter(x => x.date >= start && x.date <= end);
+        const others = rows.slice(0, Math.min(8, rows.length));
+        const display = visible.length > 0 ? visible : others;
         const html = `<table class="inv-table"><thead><tr>
           <th>date</th><th>status</th><th>holder</th><th>expires_at</th>
-        </tr></thead><tbody>${rows.map(x => `<tr>
-          <td>${x.date}</td><td>${statusPill(x.status)}</td>
-          <td>${x.holder || '-'}</td><td>${x.expires_at || '-'}</td>
-        </tr>`).join('')}</tbody></table>`;
+        </tr></thead><tbody>${display.map(x => {
+          const isMine = this.bookingId && x.holder === this.bookingId;
+          return `<tr style="${isMine ? 'background:#fef9c3;' : ''}">
+            <td>${x.date}${isMine ? ' ← 你的' : ''}</td>
+            <td>${statusPill(x.status)}</td>
+            <td>${x.holder || '-'}</td>
+            <td>${x.expires_at ? x.expires_at.replace('T',' ').slice(0,19) : '-'}</td>
+          </tr>`;
+        }).join('')}</tbody></table>
+        <div class="help">${visible.length > 0 ? `顯示你選的日期 ${start} → ${end} 的 inventory rows。` : '未訂房,顯示前 8 天 inventory。按 1️⃣ Reserve 後會聚焦到你訂的日期。'}</div>`;
         document.getElementById('q4-inv-out').innerHTML = html;
       },
     };
-    document.getElementById('q4-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q4-home'));
+    document.getElementById('q4-city').addEventListener('change', async e => {
+      await loadHomesForCity(e.target.value, 'q4-home');
+      Q4._resetState();
+    });
+    document.getElementById('q4-home').addEventListener('change', () => Q4._resetState());
 
     // ===== Q5 =====
     const Q5 = {
@@ -1255,7 +1403,7 @@
       await loadSettingsToToggles();
       await refreshHeaderStats();
       await Q5.refreshStats();
-      Q4._renderCurrent(null);
+      Q4._resetState();
       setInterval(refreshHeaderStats, 5000);
     })();
   </script>

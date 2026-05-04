@@ -326,6 +326,145 @@ def http_bench(runs: int = 30, nights: int = 5, db: Session = Depends(get_db)):
     return BenchResponse(results=results)
 
 
+@router.post("/api/q1/compare")
+def http_q1_compare(
+    city: str = "Honolulu",
+    nights: int = 5,
+    runs: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Compare per-day rows vs range-table query, both targeting 'find homes
+    available for N consecutive nights in :city'.
+
+    Per-day: hits the inventory table with a clean range scan + GROUP BY.
+    Range: hits the bookings table with a NOT EXISTS overlap subquery.
+    """
+    from datetime import date, timedelta
+    from time import perf_counter
+
+    today = date.today()
+    start_date = today
+    end_date = today + timedelta(days=nights - 1)
+
+    bookings_count = db.execute(text("SELECT COUNT(*) FROM bookings")).scalar() or 0
+    seeded_extra = 0
+    if bookings_count < 30:
+        rng_seed = 13
+        homes = db.execute(
+            text("SELECT id FROM homes WHERE city = :city LIMIT 50"),
+            {"city": city},
+        ).fetchall()
+        if homes:
+            from random import Random
+            from secrets import token_hex
+            from datetime import datetime as dt
+            rng = Random(rng_seed)
+            for _ in range(50):
+                h = rng.choice(homes)[0]
+                offset = rng.randint(20, 28)
+                length = rng.randint(2, 5)
+                s = today + timedelta(days=offset)
+                e = s + timedelta(days=length - 1)
+                bid = "FAKE_" + token_hex(6)
+                try:
+                    db.execute(
+                        text(
+                            "INSERT INTO bookings (id, home_id, user_id, start_date, end_date, status, created_at) "
+                            "VALUES (:id, :h, 'demo', :s, :e, 'booked', :now)"
+                        ),
+                        {"id": bid, "h": h, "s": s, "e": e, "now": dt.utcnow()},
+                    )
+                    seeded_extra += 1
+                except Exception:
+                    db.rollback()
+            db.commit()
+
+    per_day_sql = text(
+        """
+        SELECT home_id FROM inventory
+        WHERE city = :city
+          AND date BETWEEN :start AND :end
+          AND status = 'available'
+        GROUP BY home_id
+        HAVING COUNT(*) = :nights
+        """
+    )
+    range_sql = text(
+        """
+        SELECT h.id FROM homes h
+        WHERE h.city = :city
+          AND NOT EXISTS (
+            SELECT 1 FROM bookings b
+            WHERE b.home_id = h.id
+              AND b.status IN ('reserved', 'paid', 'booked')
+              AND b.start_date <= :end
+              AND b.end_date >= :start
+          )
+        """
+    )
+
+    params = {
+        "city": city,
+        "start": start_date,
+        "end": end_date,
+        "nights": nights,
+    }
+
+    db.execute(per_day_sql, params).fetchall()
+    db.execute(range_sql, params).fetchall()
+
+    per_day_times = []
+    for _ in range(runs):
+        t0 = perf_counter()
+        per_day_rows = db.execute(per_day_sql, params).fetchall()
+        per_day_times.append((perf_counter() - t0) * 1000)
+
+    range_times = []
+    for _ in range(runs):
+        t0 = perf_counter()
+        range_rows = db.execute(range_sql, params).fetchall()
+        range_times.append((perf_counter() - t0) * 1000)
+
+    def stats(times: list[float]) -> dict:
+        return {
+            "avg_ms": round(sum(times) / len(times), 4),
+            "min_ms": round(min(times), 4),
+            "max_ms": round(max(times), 4),
+            "total_ms": round(sum(times), 2),
+        }
+
+    per_day_stats = stats(per_day_times)
+    range_stats = stats(range_times)
+    winner = "per_day" if per_day_stats["avg_ms"] <= range_stats["avg_ms"] else "range"
+    ratio = round(
+        max(per_day_stats["avg_ms"], range_stats["avg_ms"])
+        / max(min(per_day_stats["avg_ms"], range_stats["avg_ms"]), 0.0001),
+        2,
+    )
+
+    return {
+        "city": city,
+        "start": str(start_date),
+        "end": str(end_date),
+        "nights": nights,
+        "runs_per_query": runs,
+        "bookings_in_db": bookings_count + seeded_extra,
+        "seeded_demo_bookings": seeded_extra,
+        "per_day": {
+            **per_day_stats,
+            "result_count": len(per_day_rows),
+            "sql": per_day_sql.text.strip(),
+        },
+        "range": {
+            **range_stats,
+            "result_count": len(range_rows),
+            "sql": range_sql.text.strip(),
+        },
+        "winner": winner,
+        "ratio": ratio,
+    }
+
+
 @router.get("/api/stats")
 def http_stats(db: Session = Depends(get_db)):
     homes = db.execute(text("SELECT COUNT(*) FROM homes")).scalar()
