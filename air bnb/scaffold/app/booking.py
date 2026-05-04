@@ -216,10 +216,13 @@ def confirm_payment(
     booking_id: str,
     idempotency_key: str | None,
 ) -> tuple[Booking | None, str, bool]:
-    """Step 1: Mark booking as paid (Stripe ack).
-    Step 2: Finalize inventory rows to 'booked'.
+    """Step 1 of Q4 checkpoint: Stripe webhook arrived, money received.
 
-    Returns (booking, message, idempotent_replay).
+    Transition: reserved -> paid (single-row conditional UPDATE).
+    Inventory rows are NOT yet flipped to 'booked' — that's finalize_booking()'s job.
+    This gap is intentional: 'paid' is the cross-system checkpoint that says
+    'I acknowledge the external charge', distinct from 'booked' which says
+    'my internal inventory is updated'.
     """
     if settings.idempotency_enforced and idempotency_key:
         existing = db.get(WebhookEvent, idempotency_key)
@@ -230,28 +233,65 @@ def confirm_payment(
     booking = db.get(Booking, booking_id)
     if booking is None:
         return None, "Booking not found", False
+    if booking.status == "paid":
+        return booking, "Already paid (call /finalize to mark booked)", False
     if booking.status == "booked":
         return booking, "Already booked", False
-    if booking.status not in {"reserved", "paid"}:
-        return booking, f"Cannot confirm from status={booking.status}", False
+    if booking.status != "reserved":
+        return booking, f"Cannot pay from status={booking.status}", False
 
-    if booking.status == "reserved":
-        update_sql = text(
-            """
-            UPDATE bookings
-            SET status = 'paid',
-                stripe_event_id = :event_id
-            WHERE id = :id AND status = 'reserved'
-            """
-        )
-        result = db.execute(
-            update_sql, {"event_id": idempotency_key, "id": booking_id}
-        )
-        if result.rowcount == 0:
-            db.refresh(booking)
-            return booking, "Concurrent confirm — already advanced", False
-        db.commit()
+    update_sql = text(
+        """
+        UPDATE bookings
+        SET status = 'paid',
+            stripe_event_id = :event_id
+        WHERE id = :id AND status = 'reserved'
+        """
+    )
+    result = db.execute(
+        update_sql, {"event_id": idempotency_key, "id": booking_id}
+    )
+    if result.rowcount == 0:
         db.refresh(booking)
+        return booking, "Concurrent confirm — already advanced", False
+    db.commit()
+    db.refresh(booking)
+
+    if settings.idempotency_enforced and idempotency_key:
+        try:
+            db.add(
+                WebhookEvent(
+                    event_id=idempotency_key,
+                    booking_id=booking_id,
+                    result={"status": "paid"},
+                )
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+
+    return booking, "Paid (Stripe ack recorded). Inventory still 'reserved' until finalize.", False
+
+
+def finalize_booking(
+    db: Session, booking_id: str
+) -> tuple[Booking | None, str]:
+    """Step 2 of Q4 checkpoint: internal transaction to flip inventory + booking
+    from paid -> booked. Pure internal atomic operation, no external dependency.
+
+    If this step fails (DB error, etc.), a recovery cron can find rows where
+    booking.status='paid' but inventory.status still 'reserved', and re-run.
+    """
+    booking = db.get(Booking, booking_id)
+    if booking is None:
+        return None, "Booking not found"
+    if booking.status == "booked":
+        return booking, "Already booked"
+    if booking.status != "paid":
+        return booking, (
+            f"Cannot finalize from status={booking.status}. "
+            "Must call /confirm first to mark paid."
+        )
 
     finalize_sql = text(
         """
@@ -271,28 +311,13 @@ def confirm_payment(
             "holder": booking.id,
         },
     )
-
     db.execute(
         text("UPDATE bookings SET status = 'booked' WHERE id = :id"),
         {"id": booking_id},
     )
     db.commit()
     db.refresh(booking)
-
-    if settings.idempotency_enforced and idempotency_key:
-        try:
-            db.add(
-                WebhookEvent(
-                    event_id=idempotency_key,
-                    booking_id=booking_id,
-                    result={"status": "booked"},
-                )
-            )
-            db.commit()
-        except Exception:
-            db.rollback()
-
-    return booking, "Booked", False
+    return booking, "Booked (inventory finalized)"
 
 
 def cancel_booking(

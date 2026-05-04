@@ -9,13 +9,15 @@
       --bg: #fafafa;
       --panel: #ffffff;
       --border: #e2e2e7;
-      --accent-a: #2563eb;
-      --accent-b: #db2777;
+      --accent: #2563eb;
+      --user-a: #2563eb;
+      --user-b: #db2777;
       --ok: #16a34a;
       --warn: #d97706;
       --err: #dc2626;
       --muted: #6b7280;
       --code-bg: #f4f4f5;
+      --tab-active-bg: #111;
     }
     * { box-sizing: border-box; }
     body {
@@ -23,39 +25,81 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
       background: var(--bg);
       color: #111;
-      line-height: 1.5;
+      line-height: 1.55;
     }
     header {
       background: #111;
       color: #fff;
-      padding: 14px 24px;
+      padding: 12px 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-    header .stats { font-size: 13px; color: #aaa; display: flex; gap: 16px; }
-    header .stats span b { color: #fff; }
-    main {
-      display: grid;
-      grid-template-columns: 1fr 320px;
-      gap: 20px;
-      padding: 20px;
-      max-width: 1600px;
-      margin: 0 auto;
+    header .stats { font-size: 12px; color: #aaa; display: flex; gap: 14px; }
+    header .stats b { color: #fff; }
+    nav.tabs {
+      background: #1f1f23;
+      padding: 0 24px;
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid #333;
+      overflow-x: auto;
     }
-    .users-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
+    nav.tabs button {
+      background: transparent;
+      color: #aaa;
+      border: none;
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
     }
+    nav.tabs button:hover { color: #fff; }
+    nav.tabs button.active {
+      color: #fff;
+      border-bottom-color: var(--accent);
+      font-weight: 600;
+    }
+    main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+
+    .tab { display: none; }
+    .tab.active { display: block; }
+
+    .question {
+      background: linear-gradient(180deg, #fff 0%, #f8f9fb 100%);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 18px;
+    }
+    .question h2 {
+      margin: 0 0 6px 0;
+      font-size: 16px;
+      color: var(--accent);
+    }
+    .question p { margin: 0; color: #444; font-size: 13.5px; }
+    .question .observe {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: #fffbeb;
+      border-left: 3px solid var(--warn);
+      border-radius: 0 4px 4px 0;
+      font-size: 12.5px;
+      color: #444;
+    }
+    .question .observe b { color: var(--warn); }
+
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
     }
-    .panel h2 {
+    .panel h3 {
       margin: 0 0 10px 0;
       font-size: 14px;
       font-weight: 600;
@@ -63,18 +107,14 @@
       align-items: center;
       gap: 8px;
     }
-    .panel h2 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
-    .user-a .dot { background: var(--accent-a); }
-    .user-b .dot { background: var(--accent-b); }
-    .user-a h2 { color: var(--accent-a); }
-    .user-b h2 { color: var(--accent-b); }
-    .row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .row > * { flex: 1; }
+    .panel h3 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 100px; }
     label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
     input, select, button, textarea {
       font-family: inherit;
       font-size: 13px;
-      padding: 6px 8px;
+      padding: 7px 10px;
       border: 1px solid var(--border);
       border-radius: 4px;
       width: 100%;
@@ -90,65 +130,22 @@
     button:hover { background: #333; }
     button.secondary { background: #e5e7eb; color: #111; }
     button.secondary:hover { background: #d4d4d8; }
+    button.primary-blue { background: var(--user-a); }
+    button.primary-pink { background: var(--user-b); }
     button.danger { background: var(--err); }
-    .user-a button.primary { background: var(--accent-a); }
-    .user-b button.primary { background: var(--accent-b); }
-    .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
-    .button-row button { flex: 1; min-width: 80px; }
-    .log {
-      background: var(--code-bg);
-      border-radius: 4px;
-      padding: 8px;
-      max-height: 320px;
-      overflow-y: auto;
-      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-      font-size: 11.5px;
-      line-height: 1.45;
-    }
-    .log-entry { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed #ddd; }
-    .log-entry:last-child { border-bottom: none; }
-    .log-entry .meta { color: var(--muted); font-size: 10.5px; }
-    .log-entry .ms { font-weight: 600; }
-    .log-entry .ms.fast { color: var(--ok); }
-    .log-entry .ms.med  { color: var(--warn); }
-    .log-entry .ms.slow { color: var(--err); }
-    .log-entry .status-ok { color: var(--ok); font-weight: 600; }
-    .log-entry .status-fail { color: var(--err); font-weight: 600; }
-    .log-entry pre { margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-all; }
-    .settings { position: sticky; top: 20px; align-self: flex-start; }
-    .settings .field { margin-bottom: 12px; }
-    .settings .help {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-    .badge {
-      display: inline-block;
-      background: var(--code-bg);
-      color: #555;
-      padding: 1px 6px;
-      border-radius: 3px;
-      font-size: 11px;
-      margin-left: 6px;
-    }
-    .bench-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .bench-table th, .bench-table td {
-      text-align: right;
-      padding: 4px 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .bench-table th { background: var(--code-bg); font-weight: 600; }
-    .bench-table td:first-child, .bench-table th:first-child { text-align: left; font-weight: 500; }
-    .bench-table tr.fastest td { background: #ecfccb; font-weight: 600; }
+    .button-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .button-row > button { flex: 1; min-width: 90px; }
+
     .toggle {
       display: inline-flex;
       gap: 4px;
       background: var(--code-bg);
-      padding: 2px;
+      padding: 3px;
       border-radius: 6px;
+      margin-bottom: 4px;
     }
     .toggle button {
-      padding: 4px 10px;
+      padding: 5px 12px;
       font-size: 12px;
       background: transparent;
       color: #555;
@@ -160,43 +157,137 @@
       background: white;
       color: #111;
       box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-    }
-    details { margin-top: 8px; }
-    details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
-    .bookings-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11.5px;
-      margin-top: 8px;
-    }
-    .bookings-table td, .bookings-table th {
-      padding: 4px 6px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-    }
-    .bookings-table th { background: var(--code-bg); }
-    .status-pill {
-      display: inline-block;
-      padding: 1px 6px;
-      border-radius: 3px;
-      font-size: 10px;
       font-weight: 600;
     }
-    .status-reserved { background: #fef3c7; color: #92400e; }
-    .status-paid { background: #dbeafe; color: #1e40af; }
-    .status-booked { background: #d1fae5; color: #065f46; }
-    .status-cancelled { background: #f3f4f6; color: #4b5563; }
-    .status-rejected { background: #fee2e2; color: #991b1b; }
+    .help { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+    .log {
+      background: var(--code-bg);
+      border-radius: 4px;
+      padding: 10px;
+      max-height: 280px;
+      overflow-y: auto;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 11.5px;
+    }
+    .log-entry { padding: 6px 0; border-bottom: 1px dashed #ddd; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry .meta { color: var(--muted); font-size: 10.5px; }
+    .log-entry .ms { font-weight: 700; }
+    .log-entry .ms.fast { color: var(--ok); }
+    .log-entry .ms.med { color: var(--warn); }
+    .log-entry .ms.slow { color: var(--err); }
+    .log-entry .ok { color: var(--ok); font-weight: 600; }
+    .log-entry .fail { color: var(--err); font-weight: 600; }
+    .log-entry .badge {
+      display: inline-block;
+      background: white;
+      border: 1px solid var(--border);
+      color: #555;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10.5px;
+      margin-left: 4px;
+    }
+    .log-entry pre { margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-word; font-size: 10.5px; }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .pipe-step {
+      text-align: center;
+      padding: 12px 8px;
+      background: var(--code-bg);
+      border-radius: 6px;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .pipe-step.active {
+      background: #fef3c7;
+      border-color: var(--warn);
+    }
+    .pipe-step.done {
+      background: #d1fae5;
+      border-color: var(--ok);
+      color: #065f46;
+    }
+    .pipe-step .label { font-size: 12px; font-weight: 600; }
+    .pipe-step .desc { font-size: 10.5px; color: #555; margin-top: 2px; }
+
+    .bench-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    .bench-table th, .bench-table td {
+      text-align: right;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .bench-table th { background: var(--code-bg); font-weight: 600; }
+    .bench-table td:first-child, .bench-table th:first-child { text-align: left; font-weight: 500; }
+    .bench-table tr.fastest { background: #ecfccb; }
+    .bench-table tr.fastest td { font-weight: 700; }
+    .bench-bar {
+      display: inline-block;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 2px;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+
     .explain-out {
       background: #1e293b;
       color: #e2e8f0;
-      padding: 10px;
+      padding: 10px 12px;
       border-radius: 4px;
       font-family: ui-monospace, monospace;
-      font-size: 11px;
+      font-size: 11.5px;
       white-space: pre-wrap;
-      margin-top: 6px;
+      margin-top: 8px;
     }
+
+    .inv-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 8px; }
+    .inv-table th, .inv-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+    .inv-table th { background: var(--code-bg); }
+
+    .users-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .user-a-tag { color: var(--user-a); font-weight: 600; }
+    .user-b-tag { color: var(--user-b); font-weight: 600; }
+    .user-a .dot { background: var(--user-a); }
+    .user-b .dot { background: var(--user-b); }
+
+    .status-pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .status-available { background: #d1fae5; color: #065f46; }
+    .status-reserved  { background: #fef3c7; color: #92400e; }
+    .status-paid      { background: #dbeafe; color: #1e40af; }
+    .status-booked    { background: #c7d2fe; color: #3730a3; }
+    .status-cancelled { background: #f3f4f6; color: #4b5563; }
+    .status-rejected  { background: #fee2e2; color: #991b1b; }
+
+    details { margin-top: 8px; }
+    details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+    code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+    .stats-card {
+      display: inline-block;
+      background: var(--code-bg);
+      padding: 6px 12px;
+      border-radius: 4px;
+      margin-right: 8px;
+      font-size: 12px;
+    }
+    .stats-card b { color: #111; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -204,233 +295,508 @@
     <h1>🛏 Airbnb Booking Playground</h1>
     <div class="stats" id="stats">
       <span>Homes: <b id="stat-homes">-</b></span>
-      <span>Inventory rows: <b id="stat-inv">-</b></span>
+      <span>Inventory: <b id="stat-inv">-</b></span>
       <span>Bookings: <b id="stat-bookings">-</b></span>
       <span>Cache: <b id="stat-cache">-</b></span>
     </div>
   </header>
 
-  <main>
-    <div>
-      <div class="users-grid">
-        <!-- USER A PANEL -->
-        <section class="panel user-a">
-          <h2><span class="dot"></span> User A</h2>
-          <div class="row">
-            <div>
-              <label>City</label>
-              <select id="A-city"></select>
-            </div>
-            <div>
-              <label>Home</label>
-              <select id="A-home"></select>
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <label>Start date</label>
-              <input type="date" id="A-start" />
-            </div>
-            <div>
-              <label>End date</label>
-              <input type="date" id="A-end" />
-            </div>
-          </div>
-          <div class="button-row">
-            <button class="primary" onclick="actions.search('A')">Search</button>
-            <button class="primary" onclick="actions.detail('A')">View Detail</button>
-            <button class="primary" onclick="actions.book('A')">Reserve</button>
-          </div>
-          <div class="button-row" style="margin-top: 6px;">
-            <button class="secondary" onclick="actions.confirm('A')">Confirm Pay</button>
-            <button class="secondary" onclick="actions.cancel('A')">Cancel</button>
-            <button class="secondary" onclick="actions.confirmDup('A')">Replay Webhook</button>
-          </div>
-          <h2 style="margin-top: 12px;">Activity Log</h2>
-          <div class="log" id="A-log"></div>
-        </section>
+  <nav class="tabs" id="tabs">
+    <button data-tab="q1" class="active">Q1 · Inventory Schema</button>
+    <button data-tab="q2">Q2 · Concurrent Booking</button>
+    <button data-tab="q3">Q3 · Index Strategy</button>
+    <button data-tab="q4">Q4 · State Machine</button>
+    <button data-tab="q5">Q5 · Caching</button>
+    <button data-tab="admin">⚙ Admin / Data</button>
+  </nav>
 
-        <!-- USER B PANEL -->
-        <section class="panel user-b">
-          <h2><span class="dot"></span> User B</h2>
-          <div class="row">
-            <div>
-              <label>City</label>
-              <select id="B-city"></select>
-            </div>
-            <div>
-              <label>Home</label>
-              <select id="B-home"></select>
-            </div>
-          </div>
-          <div class="row">
-            <div>
-              <label>Start date</label>
-              <input type="date" id="B-start" />
-            </div>
-            <div>
-              <label>End date</label>
-              <input type="date" id="B-end" />
-            </div>
-          </div>
-          <div class="button-row">
-            <button class="primary" onclick="actions.search('B')">Search</button>
-            <button class="primary" onclick="actions.detail('B')">View Detail</button>
-            <button class="primary" onclick="actions.book('B')">Reserve</button>
-          </div>
-          <div class="button-row" style="margin-top: 6px;">
-            <button class="secondary" onclick="actions.confirm('B')">Confirm Pay</button>
-            <button class="secondary" onclick="actions.cancel('B')">Cancel</button>
-            <button class="secondary" onclick="actions.confirmDup('B')">Replay Webhook</button>
-          </div>
-          <h2 style="margin-top: 12px;">Activity Log</h2>
-          <div class="log" id="B-log"></div>
-        </section>
+  <main>
+    <!-- ==================== Q1 ==================== -->
+    <section class="tab active" id="tab-q1">
+      <div class="question">
+        <h2>Q1 · Inventory Schema — 為什麼預先生成「每天一筆」?</h2>
+        <p><b>問題</b>：未來 12 個月每個房的可訂日期,要怎麼存?</p>
+        <p><b>本系統的選擇</b>:每個房預先生成 N 天的 row,每筆 = <code>(home_id, date, status)</code>。
+        訂房 5 天 = UPDATE 5 筆 row。換來的好處是搜尋變成單純的 <code>WHERE city=? AND date BETWEEN ? AND ? AND status='available'</code>,
+        可以被普通 B-tree compound index 一次 seek 完成。</p>
+        <div class="observe"><b>怎麼測:</b><br>
+          1. 選一個城市 → 從下拉選一個房<br>
+          2. 按 <b>Show inventory rows</b><br>
+          3. 你會看到該房未來 30 天的 inventory rows,每一天都有獨立的一筆,status 都是 available<br>
+          <br>
+          <b>觀察重點:</b>所有 row 結構相同,差別只在 status。
+          搜尋只要在 inventory 表上做 range scan + COUNT,DB 跑得超快。
+          如果改用 range 模型 (只在被訂時 INSERT 一筆 <code>(home_id, start, end)</code>),儲存省了,但搜尋變成「找 N 個 home 都沒有 overlapping booking」 — B-tree 完全無能。
+        </div>
       </div>
 
-      <!-- SHARED PANELS -->
-      <section class="panel" style="margin-top: 16px;">
-        <h2>⚡ Race Test &mdash; A &amp; B 同時搶同一個房</h2>
-        <div class="help" style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
-          設定相同的 home + 日期後按下,兩個 booking 同時送出。觀察 logical / naive 模式下的不同結果。
-        </div>
-        <button onclick="actions.race()">🏁 Race A vs B (use A's settings)</button>
-      </section>
-
-      <section class="panel" style="margin-top: 16px;">
-        <h2>📊 Index Benchmark &mdash; 跑所有 index 策略,看 ms 差別</h2>
+      <div class="panel">
+        <h3>看某個房的 inventory 長什麼樣</h3>
         <div class="row">
           <div>
-            <label>Runs per strategy</label>
-            <input type="number" id="bench-runs" value="30" min="5" max="200" />
+            <label>城市 (City)</label>
+            <select id="q1-city"></select>
           </div>
           <div>
-            <label>Date range (nights)</label>
-            <input type="number" id="bench-nights" value="5" min="1" max="30" />
+            <label>房源 (Home)</label>
+            <select id="q1-home"></select>
           </div>
-          <div style="display: flex; align-items: end;">
-            <button onclick="actions.bench()">Run Benchmark</button>
+          <div style="display:flex; align-items:end;">
+            <button onclick="Q1.show()">Show inventory rows</button>
           </div>
         </div>
-        <div id="bench-out" style="margin-top: 10px;"></div>
-      </section>
+        <div id="q1-out"></div>
+      </div>
+    </section>
 
-      <section class="panel" style="margin-top: 16px;">
-        <h2>🔍 EXPLAIN QUERY PLAN &mdash; 看當前 index 在 query 裡有沒有被用到</h2>
-        <button class="secondary" onclick="actions.explain()">Explain current search query</button>
-        <div id="explain-out"></div>
-      </section>
-
-      <section class="panel" style="margin-top: 16px;">
-        <h2>📋 Recent Bookings</h2>
-        <div id="bookings-list"></div>
-      </section>
-    </div>
-
-    <!-- SETTINGS SIDEBAR -->
-    <aside class="settings panel">
-      <h2>⚙ Settings (live-toggle)</h2>
-
-      <div class="field">
-        <label>Q3: Index Strategy</label>
-        <div class="toggle" id="toggle-index">
-          <button data-value="none">none</button>
-          <button data-value="simple">simple</button>
-          <button data-value="compound">compound</button>
-          <button data-value="covering">cover</button>
-          <button data-value="partial">partial</button>
+    <!-- ==================== Q2 ==================== -->
+    <section class="tab" id="tab-q2">
+      <div class="question">
+        <h2>Q2 · Concurrent Booking — 兩人同時搶同一房同一日期</h2>
+        <p><b>問題</b>:User A 和 User B 同時點「訂 H1, 9/1–9/5」,系統怎麼確保只有一個成功?</p>
+        <p><b>不可違反的鐵律 (invariant)</b>:no double booking, ever。</p>
+        <div class="observe"><b>怎麼測:</b><br>
+          1. 上面切換 <b>Concurrency Mode</b> (logical / naive)<br>
+          2. 選一個房 + 日期<br>
+          3. 按 <b>🏁 Race A vs B</b> — 系統會用 <code>Promise.all</code> 同時發 A 跟 B 兩個 reservation<br>
+          4. 看下方 User A 跟 User B 兩個結果框<br>
+          <br>
+          <b>logical 模式</b>(預設,推薦):用 conditional UPDATE
+          <code>WHERE status='available' OR (reserved AND expired)</code>,DB 在那一刻原子地檢查 + 更新,
+          只有一個會拿到 affected_rows == nights → <span class="ok">一個成功 + 一個 rejected</span> ✓<br>
+          <br>
+          <b>naive 模式</b>(教學用,故意有破綻):先 SELECT 看是否可訂,再 UPDATE。中間有 race window。
+          在 PostgreSQL 裡會雙雙成功 → double booking。在 SQLite 因為 DB-level write lock 仍會擋,
+          但你會看到第二筆是 <code>DB conflict</code> 而非優雅的 <code>Dates not available</code> — 那就是缺乏 conditional 保護的破綻。<br>
+          <br>
+          <b>重新測之前</b>:按 <b>Cancel any holds</b> 把這個房上面所有未完成的 reservation 釋放掉。
         </div>
-        <div class="help">none = full scan, simple = 1-col, compound = (city,date,status), covering = +home_id, partial = WHERE status='available'</div>
       </div>
 
-      <div class="field">
-        <label>Q5: Cache Home Detail</label>
-        <div class="toggle" id="toggle-cache">
-          <button data-value="true">on</button>
-          <button data-value="false">off</button>
+      <div class="panel">
+        <h3>① 切換並發控制策略</h3>
+        <div class="toggle" id="q2-toggle">
+          <button data-value="logical">logical (推薦,conditional UPDATE)</button>
+          <button data-value="naive">naive (有破綻,SELECT then UPDATE)</button>
         </div>
-        <div class="help">On: 第二次 GET /home/{id} 走記憶體,觀察 ms 差異</div>
+        <div class="help">切換後,任何後續的訂房請求會用新策略。</div>
       </div>
 
-      <div class="field">
-        <label>Q2: Concurrency Mode</label>
-        <div class="toggle" id="toggle-concurrency">
-          <button data-value="logical">logical (✓)</button>
-          <button data-value="naive">naive (race!)</button>
+      <div class="panel">
+        <h3>② 設定目標房 + 日期</h3>
+        <div class="row">
+          <div>
+            <label>城市 (City)</label>
+            <select id="q2-city"></select>
+          </div>
+          <div>
+            <label>房源 (Home)</label>
+            <select id="q2-home"></select>
+          </div>
+          <div>
+            <label>起 (Start)</label>
+            <input type="date" id="q2-start" />
+          </div>
+          <div>
+            <label>迄 (End)</label>
+            <input type="date" id="q2-end" />
+          </div>
         </div>
-        <div class="help">naive = SELECT then UPDATE,race window 開放,A vs B 同搶會雙雙成功</div>
-      </div>
-
-      <div class="field">
-        <label>Q4: Idempotency Enforced</label>
-        <div class="toggle" id="toggle-idempotency">
-          <button data-value="true">on</button>
-          <button data-value="false">off</button>
+        <div class="button-row">
+          <button class="secondary" onclick="Q2.refreshHomes()">重新載入房源清單</button>
+          <button class="primary-blue" onclick="Q2.race()">🏁 Race A vs B (同房同日期)</button>
+          <button class="danger" onclick="Q2.cancelAll()">釋放此房上所有未完成的 hold</button>
         </div>
-        <div class="help">On: 同 idempotency_key 第二次 confirm 直接回上次結果</div>
       </div>
 
-      <div class="field">
-        <label>Reservation TTL (seconds)</label>
-        <input type="number" id="ttl-input" min="5" max="3600" value="600" />
-        <div class="help">過期後 row 變邏輯可訂,下一個 booking 自動 take over</div>
+      <div class="users-grid">
+        <div class="panel user-a">
+          <h3><span class="dot"></span> User A 的結果</h3>
+          <div class="log" id="q2-log-a"></div>
+        </div>
+        <div class="panel user-b">
+          <h3><span class="dot"></span> User B 的結果</h3>
+          <div class="log" id="q2-log-b"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== Q3 ==================== -->
+    <section class="tab" id="tab-q3">
+      <div class="question">
+        <h2>Q3 · Index Strategy — 用什麼 index 讓 search 跑得快?</h2>
+        <p><b>問題</b>:Search query 是 <code>WHERE city=? AND date BETWEEN ? AND ? AND status='available'</code>,
+        資料量 365 天 × 10K 房 = 3.65M rows,SLA 要求 < 500ms。怎麼建 index?</p>
+        <p>5 種策略可切換,每種都會即時 DROP 舊 index + CREATE 新 index,然後跑 EXPLAIN / Search / Bench 看差別。</p>
+        <div class="observe"><b>怎麼測 (3 個工具,各有用途):</b><br>
+          <br>
+          <b>Tool 1: Single search</b> — 跑一次 query,看 ms。最直接但小資料下差距小。<br>
+          <b>Tool 2: EXPLAIN</b> — 看 DB 真的有沒有用上 index。這是最可信的判斷方法。<br>
+          &nbsp;&nbsp;<code>SCAN</code> = 全表掃描,壞 ❌<br>
+          &nbsp;&nbsp;<code>SEARCH ... USING INDEX</code> = 用上 index,好 ✓<br>
+          &nbsp;&nbsp;<code>SEARCH ... USING COVERING INDEX</code> = 用上 index + 不回主表,最好 ✓✓<br>
+          <b>Tool 3: Benchmark</b> — 自動切過所有 5 種策略各跑 N 次,給你對照表。<br>
+          <br>
+          <b>5 種策略一覽:</b><br>
+          • <b>none</b>: 不建 index → SCAN (全表掃)<br>
+          • <b>simple</b>: 只對 city 建 → 用得上但只切第一刀<br>
+          • <b>compound</b>: <code>(city, date, status)</code> → 經典三層 seek,推薦預設<br>
+          • <b>covering</b>: <code>(city, date, status, home_id)</code> → 連回主表都免了<br>
+          • <b>partial</b>: <code>(city, date, home_id) WHERE status='available'</code> → 只服務 99% 的 query,index 體積砍半<br>
+          <br>
+          <b>⚠ 想看真實差距:</b>去 Admin tab 按 <b>Seed Large</b> 生 3.65M rows。預設的 1.5K rows 全部都很快 (1-3ms),
+          差距藏在 EXPLAIN 而非 ms。
+        </div>
       </div>
 
-      <h2 style="margin-top: 16px;">🌱 Seed Data</h2>
-      <div class="button-row">
-        <button class="secondary" onclick="actions.seed('small')">Seed Small (50)</button>
-        <button class="secondary" onclick="actions.seed('large')">Seed Large (10K)</button>
+      <div class="panel">
+        <h3>① 切換 Index Strategy</h3>
+        <div class="toggle" id="q3-toggle">
+          <button data-value="none">none (沒 index)</button>
+          <button data-value="simple">simple (只對 city)</button>
+          <button data-value="compound">compound (city, date, status)</button>
+          <button data-value="covering">covering (+home_id)</button>
+          <button data-value="partial">partial (WHERE status='available')</button>
+        </div>
+        <div class="help">切換時會自動 DROP 舊 index + CREATE 新 index + dispose 連線池(讓 EXPLAIN 立即生效)</div>
       </div>
-      <div class="button-row" style="margin-top: 6px;">
-        <button class="danger" onclick="actions.reset()">Reset DB</button>
-        <button class="secondary" onclick="actions.cacheClear()">Clear Cache</button>
+
+      <div class="panel">
+        <h3>② Tool 1+2: 跑單次 Search 看 ms,然後 EXPLAIN 看 query plan</h3>
+        <div class="row">
+          <div>
+            <label>城市 (City)</label>
+            <select id="q3-city"></select>
+          </div>
+          <div>
+            <label>起 (Start)</label>
+            <input type="date" id="q3-start" />
+          </div>
+          <div>
+            <label>迄 (End)</label>
+            <input type="date" id="q3-end" />
+          </div>
+          <div style="display:flex; align-items:end; gap: 6px;">
+            <button onclick="Q3.search()">Search (看 ms)</button>
+            <button class="secondary" onclick="Q3.explain()">EXPLAIN (看 plan)</button>
+          </div>
+        </div>
+        <div id="q3-search-out"></div>
+        <div id="q3-explain-out"></div>
       </div>
-      <div class="help" style="margin-top: 6px;">
-        Large seed (3.65M rows) 拿來看 index strategy 的 ms 差距才明顯。需要 ~30s。
+
+      <div class="panel">
+        <h3>③ Tool 3: Benchmark — 自動跑過所有 5 種策略</h3>
+        <div class="row">
+          <div>
+            <label>每種策略跑幾次</label>
+            <input type="number" id="q3-bench-runs" value="30" min="5" max="200" />
+          </div>
+          <div>
+            <label>查詢的日期跨度 (天)</label>
+            <input type="number" id="q3-bench-nights" value="5" min="1" max="30" />
+          </div>
+          <div style="display:flex; align-items:end;">
+            <button onclick="Q3.bench()">Run Benchmark</button>
+          </div>
+        </div>
+        <div id="q3-bench-out"></div>
       </div>
-    </aside>
+    </section>
+
+    <!-- ==================== Q4 ==================== -->
+    <section class="tab" id="tab-q4">
+      <div class="question">
+        <h2>Q4 · State Machine + Idempotency — 為什麼要 reserved → paid → booked 三段?</h2>
+        <p><b>問題</b>:訂房經過「使用者點訂 → 跳付款頁 → Stripe 扣款 → webhook 通知」,
+        中間有跨公司、跨網路、跨時間的不確定性。怎麼設計狀態才能容錯?</p>
+        <p>這個 tab 把每個狀態轉移做成一個按鈕,你會看到 <b>paid 跟 booked 是兩個獨立的 step</b>,可以觀察到中間狀態。</p>
+        <div class="observe"><b>怎麼測 (照著按 1-2-3-↺):</b><br>
+          <br>
+          <b>① Reserve</b> → 狀態變 <code>reserved</code>,inventory 鎖 10 分鐘 (TTL),User 可以去輸入卡號<br>
+          <b>② Confirm Pay</b> → 模擬 Stripe webhook 到 → 狀態變 <code>paid</code>。
+          注意 <b>inventory 還是 reserved!</b> (按 👀 Peek inventory 確認)。
+          這代表「我承認 Stripe 那邊收到錢了,但我家的工還沒做完」<br>
+          <b>③ Finalize</b> → 自家 atomic transaction,inventory 才真的變 <code>booked</code>,booking 也變 booked<br>
+          <b>↺ Replay</b> → 用同一個 idempotency key 再發一次 confirm,看看會不會重複扣款<br>
+          <br>
+          <b>為什麼 paid 和 booked 不能合一步?</b><br>
+          因為跨系統 (你 vs Stripe) 沒有真正的 atomic。如果合一步:<br>
+          1. Stripe 已扣款 → 你的 transaction commit 失敗 → 你不知道,Stripe 也不知道你不知道<br>
+          2. Stripe retry webhook → 你又執行一次 → 重複處理<br>
+          拆成兩步後:<code>paid</code> 是 checkpoint,即使 finalize 失敗,cron 可以掃「paid 但未 booked」重做。<br>
+          <br>
+          <b>為什麼要 idempotency?</b><br>
+          Stripe 文件白紙黑字寫:webhook may be delivered multiple times。
+          重複的 webhook 必須當設計需求處理,不是 edge case。
+          打開 idempotency on,replay 會直接回上次結果 (idempotent_replay=true);
+          關掉 off,replay 會嘗試重複處理 (但 conditional UPDATE 仍會擋,只是不優雅)。
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>① Idempotency 設定</h3>
+        <div class="toggle" id="q4-toggle">
+          <button data-value="true">on (推薦,replay 直接回上次結果)</button>
+          <button data-value="false">off (replay = 嘗試重複處理)</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>② 設定要訂的房 + 日期</h3>
+        <div class="row">
+          <div>
+            <label>城市 (City)</label>
+            <select id="q4-city"></select>
+          </div>
+          <div>
+            <label>房源 (Home)</label>
+            <select id="q4-home"></select>
+          </div>
+          <div>
+            <label>起 (Start)</label>
+            <input type="date" id="q4-start" />
+          </div>
+          <div>
+            <label>迄 (End)</label>
+            <input type="date" id="q4-end" />
+          </div>
+        </div>
+        <button class="secondary" onclick="Q4.refreshHomes()">重新載入房源清單</button>
+      </div>
+
+      <div class="panel">
+        <h3>③ 三段式 pipeline (照順序按 1 → 2 → 3)</h3>
+        <div class="pipeline" id="q4-pipeline">
+          <div class="pipe-step" data-step="reserved">
+            <div class="label">1. reserved</div>
+            <div class="desc">hold 10 分鐘</div>
+          </div>
+          <div class="pipe-step" data-step="paid">
+            <div class="label">2. paid</div>
+            <div class="desc">Stripe ack 收到</div>
+          </div>
+          <div class="pipe-step" data-step="booked">
+            <div class="label">3. booked</div>
+            <div class="desc">inventory 真的更新</div>
+          </div>
+          <div class="pipe-step" data-step="done">
+            <div class="label">✓ 完成</div>
+            <div class="desc">三段都通過</div>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="primary-blue" onclick="Q4.reserve()">1️⃣ Reserve (鎖庫存)</button>
+          <button class="primary-blue" onclick="Q4.confirmPay()">2️⃣ Confirm Pay (Stripe ack → paid)</button>
+          <button class="primary-blue" onclick="Q4.finalize()">3️⃣ Finalize (paid → booked)</button>
+        </div>
+        <div class="button-row">
+          <button class="secondary" onclick="Q4.replayPay()">↺ Replay Confirm (同一個 key)</button>
+          <button class="danger" onclick="Q4.cancel()">✗ Cancel (釋放庫存)</button>
+          <button class="secondary" onclick="Q4.peekInventory()">👀 偷看 inventory rows</button>
+        </div>
+        <div id="q4-current"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Activity log (看每一步的狀態 + ms)</h3>
+        <div class="log" id="q4-log"></div>
+      </div>
+
+      <div class="panel">
+        <h3>這個房的 inventory rows (按 👀 Peek 後顯示)</h3>
+        <div class="help">特別注意:Step 2 (Confirm Pay) 後 booking 變 paid,但 inventory 還是 reserved。
+          只有 Step 3 (Finalize) 後 inventory 才變 booked。</div>
+        <div id="q4-inv-out"></div>
+      </div>
+    </section>
+
+    <!-- ==================== Q5 ==================== -->
+    <section class="tab" id="tab-q5">
+      <div class="question">
+        <h2>Q5 · Caching — 為什麼 Home detail 該 cache,Search results 不該?</h2>
+        <p><b>問題</b>:10M DAU ≈ 400K QPS,DB 撐不住,必須 cache。但 cache 什麼?</p>
+        <p>正解:<b>cache home detail</b>(房源資料變動低、key 簡單),<b>絕對不要 cache search results</b>(key 組合爆炸、invalidation 不可能)。
+        這個 tab 讓你親眼看到 home detail 的 cache hit/miss ms 差距。</p>
+        <div class="observe"><b>怎麼測:</b><br>
+          <br>
+          <b>Step 1: cache on 模式</b> (預設)<br>
+          1. 選一個房 → 按 <b>GET (1 call)</b> → 看到 <code>CACHE MISS</code>,ms 約 5-10<br>
+          2. 再按一次同一個房 → 看到 <code>CACHE HIT</code>,ms 約 0.01-0.05<br>
+          3. 通常會看到 <b>100×–500× 加速</b> ⚡<br>
+          4. 按 <b>GET × 10</b> 連發 10 次,觀察 hit rate<br>
+          <br>
+          <b>Step 2: cache off 模式</b><br>
+          切到 off → 重複上面動作 → 每次都是 MISS,ms 都一樣慢<br>
+          <br>
+          <b>Step 3: 觀察 cache stats</b><br>
+          下方 stats 顯示 size / hits / misses / hit rate,對照看效果<br>
+          <br>
+          <b>核心心法 (cache 4 維度判斷):</b><br>
+          <table style="font-size:11.5px; border-collapse:collapse; margin-top:6px;">
+            <tr><th></th><th style="padding:4px 8px;">Home detail</th><th style="padding:4px 8px;">Search results</th></tr>
+            <tr><td>變動頻率</td><td style="padding:4px 8px;">極低 ✓</td><td style="padding:4px 8px;">每筆訂房都變 ✗</td></tr>
+            <tr><td>Key 形狀</td><td style="padding:4px 8px;"><code>home:{id}</code> ✓</td><td style="padding:4px 8px;">city × dates × pageSize × page × filters 爆炸 ✗</td></tr>
+            <tr><td>Stale 後果</td><td style="padding:4px 8px;">「地址舊 1 小時」小事 ✓</td><td style="padding:4px 8px;">「以為可訂訂下被擋」災難 ✗</td></tr>
+            <tr><td>Invalidation</td><td style="padding:4px 8px;">delete 1 個 key ✓</td><td style="padding:4px 8px;">不可能列舉 ✗</td></tr>
+          </table>
+          <br>
+          <b>4 個維度全過才該 cache</b>。Home detail 完美,search results 全炸。
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>① Cache 開關</h3>
+        <div class="toggle" id="q5-toggle">
+          <button data-value="true">on (cache home detail)</button>
+          <button data-value="false">off (每次都 hit DB)</button>
+        </div>
+        <div class="help">關掉時 cache 會被清空。</div>
+      </div>
+
+      <div class="panel">
+        <h3>② 跑 GET /home/{id} 看 cache hit/miss + ms</h3>
+        <div class="row">
+          <div>
+            <label>城市 (City)</label>
+            <select id="q5-city"></select>
+          </div>
+          <div>
+            <label>房源 (Home)</label>
+            <select id="q5-home"></select>
+          </div>
+          <div style="display:flex; align-items:end; gap:6px;">
+            <button onclick="Q5.fetch()">GET (1 次)</button>
+            <button class="secondary" onclick="Q5.fetchMany(10)">GET × 10 次</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="secondary" onclick="Q5.refreshHomes()">重新載入房源清單</button>
+          <button class="danger" onclick="Q5.clearCache()">Clear cache (重置)</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Activity log (CACHE MISS 慢、CACHE HIT 飛快)</h3>
+        <div class="log" id="q5-log"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Cache stats (即時)</h3>
+        <div id="q5-stats"></div>
+      </div>
+    </section>
+
+    <!-- ==================== Admin ==================== -->
+    <section class="tab" id="tab-admin">
+      <div class="question">
+        <h2>⚙ Admin · 資料管理、設定總覽、訂單紀錄</h2>
+        <p>Seed / Reset 資料,調整 TTL,看所有 booking 歷史。</p>
+      </div>
+
+      <div class="panel">
+        <h3>Seed (產生測試資料)</h3>
+        <div class="button-row">
+          <button class="secondary" onclick="Admin.seed('small')">Seed Small (50 房 × 30 天 = 1.5K rows,<5 秒)</button>
+          <button class="secondary" onclick="Admin.seed('large')">Seed Large (10K 房 × 365 天 = 3.65M rows,~30 秒)</button>
+        </div>
+        <div class="button-row">
+          <button class="danger" onclick="Admin.reset()">Reset DB (清光所有資料)</button>
+        </div>
+        <div class="help"><b>什麼時候用 Large?</b> 想看 Q3 index 策略的真實 ms 差距時。Small seed 資料太少,所有策略都在 1-3ms 內,差距藏在 EXPLAIN QUERY PLAN 而不是 ms。Large 可以看到 covering vs none 的 5-100× 差距。</div>
+        <div id="admin-seed-out"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Reservation TTL (預訂保留時間)</h3>
+        <div class="row">
+          <div>
+            <label>秒數 (5–3600)</label>
+            <input type="number" id="admin-ttl" min="5" max="3600" value="600" />
+          </div>
+          <div style="display:flex; align-items:end;">
+            <button class="secondary" onclick="Admin.setTtl()">套用</button>
+          </div>
+        </div>
+        <div class="help">想測「過期 reservation 被下一人 take over」的場景:把 TTL 設成 5–10 秒,先 reserve 一筆,等 10 秒後再用另一個請求 reserve 同房同日期 → 第二個應該成功 (logical mode 下)。</div>
+      </div>
+
+      <div class="panel">
+        <h3>目前 settings 總覽 (唯讀)</h3>
+        <pre id="admin-settings" class="explain-out"></pre>
+      </div>
+
+      <div class="panel">
+        <h3>最近的 bookings (最多 50 筆)</h3>
+        <button class="secondary" onclick="Admin.refreshBookings()">重新整理</button>
+        <div id="admin-bookings"></div>
+      </div>
+    </section>
   </main>
 
   <script>
-    const BASE = '';
+    // ===== Shared utilities =====
     const api = async (path, opts = {}) => {
       const t0 = performance.now();
-      const r = await fetch(BASE + path, {
+      const r = await fetch(path, {
         headers: { 'Content-Type': 'application/json' },
         ...opts,
       });
-      const elapsed = performance.now() - t0;
-      const text = await r.text();
+      const networkMs = performance.now() - t0;
       let json = null;
-      try { json = JSON.parse(text); } catch { json = { raw: text }; }
-      return { ok: r.ok, status: r.status, json, networkMs: elapsed };
+      try { json = await r.json(); } catch { json = null; }
+      return { ok: r.ok, status: r.status, json, networkMs };
     };
 
-    const userColors = { A: 'user-a', B: 'user-b' };
-    const userTags = { A: 'U_A', B: 'U_B' };
+    const CITIES = ['Honolulu','Tokyo','Taipei','Bangkok','Bali',
+                    'Paris','Lisbon','Barcelona','Reykjavik','Cape Town'];
 
-    function logEntry(user, label, payload) {
-      const el = document.getElementById(user + '-log');
+    function fillCities(selectId) {
+      const sel = document.getElementById(selectId);
+      sel.innerHTML = CITIES.map(c => `<option>${c}</option>`).join('');
+    }
+
+    function fillDates(startId, endId, offsetStart = 3, offsetEnd = 5) {
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      const t = new Date();
+      document.getElementById(startId).value = fmt(new Date(t.getTime() + 86400000 * offsetStart));
+      document.getElementById(endId).value = fmt(new Date(t.getTime() + 86400000 * offsetEnd));
+    }
+
+    async function loadHomesForCity(city, selectId) {
+      // search the next ~20 days for available homes in this city
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      const t = new Date();
+      const start = fmt(new Date(t.getTime() + 86400000 * 1));
+      const end = fmt(new Date(t.getTime() + 86400000 * 2));
+      const r = await api(`/home/search?city=${encodeURIComponent(city)}&startDate=${start}&endDate=${end}&pageSize=50`);
+      const sel = document.getElementById(selectId);
+      if (r.ok && r.json.results.length) {
+        sel.innerHTML = r.json.results.map(h =>
+          `<option value="${h.home_id}">${h.home_id} · ${h.address}</option>`
+        ).join('');
+      } else {
+        sel.innerHTML = `<option value="">(no homes — try Admin tab to seed)</option>`;
+      }
+    }
+
+    function logTo(elId, label, payload) {
+      const el = document.getElementById(elId);
       const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
-      const elapsed = payload.elapsed_ms ?? payload.networkMs ?? 0;
-      const speed = elapsed < 5 ? 'fast' : elapsed < 50 ? 'med' : 'slow';
-      const cacheTag = payload.cache_hit === true ? '<span class="badge">CACHE HIT</span>'
-                    : payload.cache_hit === false ? '<span class="badge">CACHE MISS</span>'
-                    : '';
-      const idemTag = payload.idempotent_replay ? '<span class="badge">IDEMPOTENT REPLAY</span>' : '';
-      const statusCls = payload.ok === false ? 'status-fail' : 'status-ok';
-      const statusText = payload.ok === false ? `FAIL: ${payload.detail || payload.json?.detail || 'error'}` : 'OK';
+      const ms = payload.elapsed_ms ?? payload.networkMs ?? 0;
+      const speed = ms < 5 ? 'fast' : ms < 50 ? 'med' : 'slow';
+      const okCls = payload.ok === false ? 'fail' : 'ok';
+      const okText = payload.ok === false ? `FAIL` : 'OK';
+      const tags = (payload.tags || []).map(t => `<span class="badge">${t}</span>`).join('');
       const detail = payload.detail ? `<div>${payload.detail}</div>` : '';
-      const body = payload.body
-        ? `<details><summary>response</summary><pre>${JSON.stringify(payload.body, null, 2)}</pre></details>`
-        : '';
+      const body = payload.body ? `<details><summary>response body</summary><pre>${JSON.stringify(payload.body, null, 2)}</pre></details>` : '';
       const entry = document.createElement('div');
       entry.className = 'log-entry';
       entry.innerHTML = `
         <div class="meta">${time} · ${label}
-          <span class="ms ${speed}">${elapsed.toFixed(2)} ms</span>
-          ${cacheTag}${idemTag}
-          <span class="${statusCls}">${statusText}</span>
+          <span class="ms ${speed}">${ms.toFixed(2)} ms</span>
+          ${tags}
+          <span class="${okCls}">${okText}</span>
         </div>
         ${detail}
         ${body}
@@ -438,313 +804,459 @@
       el.prepend(entry);
     }
 
-    let cityList = [];
-    let lastBookingByUser = { A: null, B: null };
-    let lastConfirmKey = { A: null, B: null };
+    function statusPill(s) {
+      return `<span class="status-pill status-${s}">${s}</span>`;
+    }
 
-    const actions = {
-      async search(user) {
-        const city = document.getElementById(user + '-city').value;
-        const start = document.getElementById(user + '-start').value;
-        const end = document.getElementById(user + '-end').value;
-        const r = await api(`/home/search?city=${encodeURIComponent(city)}&startDate=${start}&endDate=${end}&pageSize=10&page=1`);
-        const j = r.json;
-        logEntry(user, `SEARCH ${city} ${start}→${end}`, {
-          elapsed_ms: j.elapsed_ms,
-          detail: r.ok ? `${j.total} hits, index=${j.index_strategy}` : null,
-          ok: r.ok,
-          body: r.ok ? j.results : j,
-        });
-        if (r.ok && j.results.length) {
-          // populate home dropdown for that user
-          const sel = document.getElementById(user + '-home');
-          sel.innerHTML = j.results
-            .map((h) => `<option value="${h.home_id}">${h.home_id} · ${h.address}</option>`)
-            .join('');
+    // ===== Tab navigation =====
+    document.querySelectorAll('nav.tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        if (btn.dataset.tab === 'admin') {
+          Admin.refreshSettings();
+          Admin.refreshBookings();
         }
-      },
+      });
+    });
 
-      async detail(user) {
-        const homeId = document.getElementById(user + '-home').value;
-        if (!homeId) return alert('Search first to populate home list');
-        const r = await api(`/home/${homeId}`);
-        const j = r.json;
-        logEntry(user, `GET DETAIL ${homeId}`, {
-          elapsed_ms: j.elapsed_ms,
-          cache_hit: j.cache_hit,
-          ok: r.ok,
-          body: j.home,
+    // ===== Settings toggles (per-tab) =====
+    function bindToggle(toggleId, field, valueParser = (v) => v) {
+      document.querySelectorAll(`#${toggleId} button`).forEach(b => {
+        b.addEventListener('click', async () => {
+          let v = b.dataset.value;
+          v = valueParser(v);
+          await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ [field]: v }) });
+          await loadSettingsToToggles();
         });
-        refreshStats();
+      });
+    }
+
+    async function loadSettingsToToggles() {
+      const r = await api('/api/settings');
+      const s = r.json;
+      const map = {
+        'q2-toggle': s.concurrency_mode,
+        'q3-toggle': s.index_strategy,
+        'q4-toggle': String(s.idempotency_enforced),
+        'q5-toggle': String(s.cache_home_detail),
+      };
+      Object.entries(map).forEach(([id, val]) => {
+        document.querySelectorAll(`#${id} button`).forEach(b => {
+          b.classList.toggle('active', b.dataset.value === val);
+        });
+      });
+      document.getElementById('admin-ttl').value = s.reservation_ttl_seconds;
+    }
+
+    bindToggle('q2-toggle', 'concurrency_mode');
+    bindToggle('q3-toggle', 'index_strategy');
+    bindToggle('q4-toggle', 'idempotency_enforced', v => v === 'true');
+    bindToggle('q5-toggle', 'cache_home_detail', v => v === 'true');
+
+    // ===== Q1 =====
+    const Q1 = {
+      async show() {
+        const homeId = document.getElementById('q1-home').value;
+        if (!homeId) return alert('Pick a home');
+        const r = await api(`/api/inventory/${homeId}`);
+        const rows = r.json || [];
+        const html = `<table class="inv-table"><thead><tr>
+          <th>date</th><th>status</th><th>holder</th><th>expires_at</th>
+        </tr></thead><tbody>${rows.map(x => `<tr>
+          <td>${x.date}</td>
+          <td>${statusPill(x.status)}</td>
+          <td>${x.holder || '-'}</td>
+          <td>${x.expires_at || '-'}</td>
+        </tr>`).join('')}</tbody></table>
+        <div class="help">${rows.length} rows shown (max 60). Each row = one (home_id, date) tuple.</div>`;
+        document.getElementById('q1-out').innerHTML = html;
+      }
+    };
+    document.getElementById('q1-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q1-home'));
+
+    // ===== Q2 =====
+    const Q2 = {
+      async refreshHomes() {
+        await loadHomesForCity(document.getElementById('q2-city').value, 'q2-home');
+      },
+      async race() {
+        const homeId = document.getElementById('q2-home').value;
+        const start = document.getElementById('q2-start').value;
+        const end = document.getElementById('q2-end').value;
+        if (!homeId) return alert('Pick a home');
+        const body = (uid) => JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: uid });
+        const [rA, rB] = await Promise.all([
+          api('/home/book', { method: 'POST', body: body('U_A') }),
+          api('/home/book', { method: 'POST', body: body('U_B') }),
+        ]);
+        const log = (slot, r) => logTo(`q2-log-${slot}`, `RESERVE ${homeId} ${start}→${end}`, {
+          elapsed_ms: r.json?.elapsed_ms,
+          ok: r.ok && r.json?.status !== 'rejected',
+          detail: `status=${r.json?.status} mode=${r.json?.concurrency_mode || ''} — ${r.json?.detail || ''}`,
+          body: r.json,
+        });
+        log('a', rA);
+        log('b', rB);
+        Admin.refreshBookings();
+      },
+      async cancelAll() {
+        const homeId = document.getElementById('q2-home').value;
+        if (!homeId) return;
+        // get all bookings on this home, cancel non-booked
+        const r = await api('/api/bookings');
+        const targets = (r.json || []).filter(b => b.home_id === homeId && b.status !== 'booked' && b.status !== 'cancelled');
+        for (const b of targets) {
+          await api(`/home/book/${b.id}/cancel`, { method: 'POST' });
+        }
+        logTo('q2-log-a', `CANCEL ALL on ${homeId}`, { elapsed_ms: 0, ok: true, detail: `released ${targets.length} bookings` });
+        Admin.refreshBookings();
+      },
+    };
+    document.getElementById('q2-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q2-home'));
+
+    // ===== Q3 =====
+    const Q3 = {
+      async search() {
+        const city = document.getElementById('q3-city').value;
+        const start = document.getElementById('q3-start').value;
+        const end = document.getElementById('q3-end').value;
+        const r = await api(`/home/search?city=${encodeURIComponent(city)}&startDate=${start}&endDate=${end}&pageSize=10`);
+        const j = r.json;
+        const html = `<div class="log"><div class="log-entry">
+          <div class="meta">SEARCH ${city} ${start}→${end}
+            <span class="ms ${j.elapsed_ms < 5 ? 'fast' : j.elapsed_ms < 50 ? 'med' : 'slow'}">${j.elapsed_ms} ms</span>
+            <span class="badge">index=${j.index_strategy}</span>
+            <span class="badge">${j.total} hits</span>
+          </div>
+          <details><summary>response</summary><pre>${JSON.stringify(j.results.slice(0, 5), null, 2)}</pre></details>
+        </div></div>`;
+        document.getElementById('q3-search-out').innerHTML = html;
+      },
+      async explain() {
+        const city = document.getElementById('q3-city').value;
+        const start = document.getElementById('q3-start').value;
+        const end = document.getElementById('q3-end').value;
+        const r = await api(`/api/explain?city=${encodeURIComponent(city)}&startDate=${start}&endDate=${end}`);
+        const j = r.json;
+        const usingIndex = j.plan.some(p => p.includes('USING INDEX') || p.includes('USING COVERING INDEX'));
+        const verdict = usingIndex
+          ? `<span class="ok">✓ index used</span>`
+          : `<span class="fail">✗ full SCAN — index not used</span>`;
+        document.getElementById('q3-explain-out').innerHTML = `
+          <div class="explain-out">${j.plan.join('\n')}</div>
+          <div class="help">strategy=<b>${j.index_strategy}</b> · ${verdict}</div>
+        `;
+      },
+      async bench() {
+        const runs = parseInt(document.getElementById('q3-bench-runs').value) || 30;
+        const nights = parseInt(document.getElementById('q3-bench-nights').value) || 5;
+        document.getElementById('q3-bench-out').innerHTML = '<em>Running… (this switches index strategies and re-runs the search)</em>';
+        const r = await api(`/api/bench?runs=${runs}&nights=${nights}`, { method: 'POST' });
+        if (!r.ok) {
+          document.getElementById('q3-bench-out').innerHTML = '<em>Failed.</em>';
+          return;
+        }
+        const results = r.json.results;
+        const fastest = results.reduce((a, b) => (a.avg_ms < b.avg_ms ? a : b));
+        const slowest = results.reduce((a, b) => (a.avg_ms > b.avg_ms ? a : b));
+        let html = '<table class="bench-table"><thead><tr>'
+          + '<th>strategy</th><th>runs</th><th>avg ms</th><th>min</th><th>max</th><th>vs fastest</th><th></th>'
+          + '</tr></thead><tbody>';
+        for (const row of results) {
+          const ratio = row.avg_ms / fastest.avg_ms;
+          const cls = row.label === fastest.label ? 'fastest' : '';
+          const barWidth = Math.min(200, (row.avg_ms / slowest.avg_ms) * 200);
+          html += `<tr class="${cls}">
+            <td>${row.label}</td>
+            <td>${row.runs}</td>
+            <td>${row.avg_ms}</td>
+            <td>${row.min_ms}</td>
+            <td>${row.max_ms}</td>
+            <td>${ratio.toFixed(2)}×</td>
+            <td><span class="bench-bar" style="width:${barWidth}px"></span></td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        html += `<div class="help">Fastest: <b>${fastest.label}</b> (${fastest.avg_ms} ms). Slowest: <b>${slowest.label}</b> (${slowest.avg_ms} ms = ${(slowest.avg_ms/fastest.avg_ms).toFixed(1)}× slower).</div>`;
+        document.getElementById('q3-bench-out').innerHTML = html;
+        await loadSettingsToToggles();
+      },
+    };
+
+    // ===== Q4 =====
+    const Q4 = {
+      bookingId: null,
+      idempotencyKey: null,
+
+      async refreshHomes() {
+        await loadHomesForCity(document.getElementById('q4-city').value, 'q4-home');
       },
 
-      async book(user) {
-        const homeId = document.getElementById(user + '-home').value;
-        const start = document.getElementById(user + '-start').value;
-        const end = document.getElementById(user + '-end').value;
-        if (!homeId) return alert('Search first to populate home list');
+      _setStep(activeStep, doneSteps = []) {
+        document.querySelectorAll('#q4-pipeline .pipe-step').forEach(el => {
+          el.classList.remove('active', 'done');
+          if (doneSteps.includes(el.dataset.step)) el.classList.add('done');
+          if (el.dataset.step === activeStep) el.classList.add('active');
+        });
+      },
+
+      _renderCurrent(b) {
+        if (!b) {
+          document.getElementById('q4-current').innerHTML = '<div class="help">No booking yet. Click <b>Reserve</b>.</div>';
+          return;
+        }
+        document.getElementById('q4-current').innerHTML = `
+          <div class="stats-card">booking_id <b>${b.booking_id}</b></div>
+          <div class="stats-card">status ${statusPill(b.status)}</div>
+          ${b.expires_at ? `<div class="stats-card">expires <b>${b.expires_at.replace('T',' ').slice(0,19)}</b></div>` : ''}
+        `;
+      },
+
+      async reserve() {
+        const homeId = document.getElementById('q4-home').value;
+        const start = document.getElementById('q4-start').value;
+        const end = document.getElementById('q4-end').value;
+        if (!homeId) return alert('Pick a home');
         const r = await api('/home/book', {
           method: 'POST',
-          body: JSON.stringify({
-            home_id: homeId,
-            start_date: start,
-            end_date: end,
-            user_id: userTags[user],
-          }),
+          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_Q4' }),
         });
         const j = r.json;
-        if (r.ok && j.booking_id) lastBookingByUser[user] = j.booking_id;
-        logEntry(user, `RESERVE ${homeId} ${start}→${end}`, {
+        if (r.ok && j.booking_id) {
+          this.bookingId = j.booking_id;
+          this.idempotencyKey = null;
+          this._setStep('reserved');
+        } else {
+          this._setStep(null);
+        }
+        this._renderCurrent(j);
+        logTo('q4-log', '1️⃣ RESERVE', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok && j.status !== 'rejected',
-          detail: `status=${j.status} mode=${j.concurrency_mode} ${j.detail || ''}`,
+          detail: `status=${j.status} ${j.detail || ''}`,
           body: j,
         });
-        refreshBookings();
+        Admin.refreshBookings();
       },
 
-      async confirm(user) {
-        const id = lastBookingByUser[user];
-        if (!id) return alert('Reserve first');
-        const key = 'evt_' + Math.random().toString(36).slice(2, 10);
-        lastConfirmKey[user] = key;
-        const r = await api(`/home/book/${id}/confirm`, {
+      async confirmPay() {
+        if (!this.bookingId) return alert('Reserve first');
+        if (!this.idempotencyKey) {
+          this.idempotencyKey = 'evt_' + Math.random().toString(36).slice(2, 10);
+        }
+        const r = await api(`/home/book/${this.bookingId}/confirm`, {
           method: 'POST',
-          body: JSON.stringify({ idempotency_key: key }),
+          body: JSON.stringify({ idempotency_key: this.idempotencyKey }),
         });
         const j = r.json;
-        logEntry(user, `CONFIRM ${id}`, {
+        const tags = [`key=${this.idempotencyKey}`];
+        if (j.idempotent_replay) tags.push('IDEMPOTENT REPLAY');
+        if (j.status === 'paid' || j.status === 'booked') {
+          this._setStep(j.status, ['reserved']);
+        }
+        this._renderCurrent(j);
+        logTo('q4-log', '2️⃣ CONFIRM PAY', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
-          idempotent_replay: j.idempotent_replay,
-          detail: `status=${j.status} key=${key}`,
+          tags,
+          detail: `status=${j.status}`,
           body: j,
         });
-        refreshBookings();
+        Admin.refreshBookings();
       },
 
-      async confirmDup(user) {
-        const id = lastBookingByUser[user];
-        const key = lastConfirmKey[user];
-        if (!id || !key) return alert('Need a confirmed booking first');
-        const r = await api(`/home/book/${id}/confirm`, {
+      async replayPay() {
+        if (!this.bookingId || !this.idempotencyKey) return alert('Need a paid booking with a key first');
+        const r = await api(`/home/book/${this.bookingId}/confirm`, {
           method: 'POST',
-          body: JSON.stringify({ idempotency_key: key }),
+          body: JSON.stringify({ idempotency_key: this.idempotencyKey }),
         });
         const j = r.json;
-        logEntry(user, `REPLAY CONFIRM ${id}`, {
+        const tags = [`key=${this.idempotencyKey}`];
+        if (j.idempotent_replay) tags.push('IDEMPOTENT REPLAY');
+        this._renderCurrent(j);
+        logTo('q4-log', '↺ REPLAY (same key)', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
-          idempotent_replay: j.idempotent_replay,
-          detail: `status=${j.status} key=${key}`,
+          tags,
+          detail: `status=${j.status}`,
           body: j,
         });
       },
 
-      async cancel(user) {
-        const id = lastBookingByUser[user];
-        if (!id) return alert('Reserve first');
-        const r = await api(`/home/book/${id}/cancel`, { method: 'POST' });
+      async finalize() {
+        if (!this.bookingId) return alert('Reserve first');
+        const r = await api(`/home/book/${this.bookingId}/finalize`, { method: 'POST' });
         const j = r.json;
-        logEntry(user, `CANCEL ${id}`, {
+        if (j.status === 'booked') {
+          this._setStep('done', ['reserved', 'paid', 'booked']);
+        }
+        this._renderCurrent(j);
+        logTo('q4-log', '3️⃣ FINALIZE', {
           elapsed_ms: j.elapsed_ms,
           ok: r.ok,
           detail: `status=${j.status}`,
           body: j,
         });
-        refreshBookings();
+        Admin.refreshBookings();
       },
 
-      async race() {
-        const homeId = document.getElementById('A-home').value;
-        const start = document.getElementById('A-start').value;
-        const end = document.getElementById('A-end').value;
-        if (!homeId) return alert('Search first');
-        // fire both bookings simultaneously
-        const reqA = api('/home/book', {
-          method: 'POST',
-          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_A' }),
-        });
-        const reqB = api('/home/book', {
-          method: 'POST',
-          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_B' }),
-        });
-        const [rA, rB] = await Promise.all([reqA, reqB]);
-        if (rA.ok && rA.json.booking_id) lastBookingByUser['A'] = rA.json.booking_id;
-        if (rB.ok && rB.json.booking_id) lastBookingByUser['B'] = rB.json.booking_id;
-        logEntry('A', `🏁 RACE ${homeId}`, {
-          elapsed_ms: rA.json.elapsed_ms,
-          ok: rA.ok && rA.json.status !== 'rejected',
-          detail: `status=${rA.json.status} ${rA.json.detail || ''}`,
-          body: rA.json,
-        });
-        logEntry('B', `🏁 RACE ${homeId}`, {
-          elapsed_ms: rB.json.elapsed_ms,
-          ok: rB.ok && rB.json.status !== 'rejected',
-          detail: `status=${rB.json.status} ${rB.json.detail || ''}`,
-          body: rB.json,
-        });
-        refreshBookings();
-      },
-
-      async bench() {
-        const runs = parseInt(document.getElementById('bench-runs').value) || 30;
-        const nights = parseInt(document.getElementById('bench-nights').value) || 5;
-        document.getElementById('bench-out').innerHTML = '<em>Running…</em>';
-        const r = await api(`/api/bench?runs=${runs}&nights=${nights}`, { method: 'POST' });
-        if (!r.ok) {
-          document.getElementById('bench-out').innerHTML = '<em>Failed.</em>';
-          return;
-        }
-        const results = r.json.results;
-        const fastest = results.reduce((a, b) => (a.avg_ms < b.avg_ms ? a : b));
-        let html = '<table class="bench-table"><thead><tr>'
-          + '<th>Index Strategy</th><th>Runs</th><th>Avg ms</th><th>Min ms</th><th>Max ms</th><th>vs fastest</th>'
-          + '</tr></thead><tbody>';
-        for (const row of results) {
-          const ratio = (row.avg_ms / fastest.avg_ms).toFixed(2);
-          const cls = row.label === fastest.label ? 'fastest' : '';
-          html += `<tr class="${cls}"><td>${row.label}</td><td>${row.runs}</td>`
-               + `<td>${row.avg_ms}</td><td>${row.min_ms}</td><td>${row.max_ms}</td>`
-               + `<td>${ratio}×</td></tr>`;
-        }
-        html += '</tbody></table>';
-        document.getElementById('bench-out').innerHTML = html;
-      },
-
-      async explain() {
-        const r = await api('/api/explain');
+      async cancel() {
+        if (!this.bookingId) return;
+        const r = await api(`/home/book/${this.bookingId}/cancel`, { method: 'POST' });
         const j = r.json;
-        const out = document.getElementById('explain-out');
-        out.innerHTML = `<div class="explain-out">${j.plan.join('\n')}</div>`
-          + `<div class="help" style="margin-top:4px;">Active strategy: <b>${j.index_strategy}</b>. Look for "USING INDEX" / "USING COVERING INDEX" vs "SCAN".</div>`;
+        this._setStep(null);
+        this._renderCurrent(j);
+        logTo('q4-log', '✗ CANCEL', {
+          elapsed_ms: j.elapsed_ms,
+          ok: r.ok,
+          detail: `status=${j.status}`,
+          body: j,
+        });
+        Admin.refreshBookings();
       },
 
+      async peekInventory() {
+        const homeId = document.getElementById('q4-home').value;
+        if (!homeId) return alert('Pick a home');
+        const r = await api(`/api/inventory/${homeId}`);
+        const rows = r.json || [];
+        const html = `<table class="inv-table"><thead><tr>
+          <th>date</th><th>status</th><th>holder</th><th>expires_at</th>
+        </tr></thead><tbody>${rows.map(x => `<tr>
+          <td>${x.date}</td><td>${statusPill(x.status)}</td>
+          <td>${x.holder || '-'}</td><td>${x.expires_at || '-'}</td>
+        </tr>`).join('')}</tbody></table>`;
+        document.getElementById('q4-inv-out').innerHTML = html;
+      },
+    };
+    document.getElementById('q4-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q4-home'));
+
+    // ===== Q5 =====
+    const Q5 = {
+      async refreshHomes() {
+        await loadHomesForCity(document.getElementById('q5-city').value, 'q5-home');
+      },
+      async fetch() {
+        const homeId = document.getElementById('q5-home').value;
+        if (!homeId) return alert('Pick a home');
+        const r = await api(`/home/${homeId}`);
+        const j = r.json;
+        const tags = [j.cache_hit ? 'CACHE HIT' : 'CACHE MISS'];
+        logTo('q5-log', `GET /home/${homeId}`, {
+          elapsed_ms: j.elapsed_ms,
+          ok: r.ok,
+          tags,
+          detail: `${j.cache_hit ? 'served from memory' : 'served from DB, cached for 1h'}`,
+          body: j.home,
+        });
+        await Q5.refreshStats();
+      },
+      async fetchMany(n) {
+        const homeId = document.getElementById('q5-home').value;
+        if (!homeId) return alert('Pick a home');
+        for (let i = 0; i < n; i++) {
+          await Q5.fetch();
+        }
+      },
+      async clearCache() {
+        await api('/api/cache/clear', { method: 'POST' });
+        logTo('q5-log', 'CACHE CLEAR', { elapsed_ms: 0, ok: true, detail: 'all entries dropped' });
+        await Q5.refreshStats();
+      },
+      async refreshStats() {
+        const r = await api('/api/cache/stats');
+        const s = r.json;
+        const html = `
+          <div class="stats-card">size <b>${s.size}</b></div>
+          <div class="stats-card">hits <b>${s.hits}</b></div>
+          <div class="stats-card">misses <b>${s.misses}</b></div>
+          <div class="stats-card">hit rate <b>${(s.hit_rate * 100).toFixed(0)}%</b></div>
+        `;
+        document.getElementById('q5-stats').innerHTML = html;
+      },
+    };
+    document.getElementById('q5-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q5-home'));
+
+    // ===== Admin =====
+    const Admin = {
       async seed(scale) {
+        const out = document.getElementById('admin-seed-out');
+        out.innerHTML = `<em>Seeding ${scale}…</em>`;
         const r = await api(`/api/admin/seed?scale=${scale}`, { method: 'POST' });
-        alert(JSON.stringify(r.json));
-        await loadCities();
-        await refreshStats();
+        out.innerHTML = `<pre class="explain-out">${JSON.stringify(r.json, null, 2)}</pre>`;
+        await refreshAllHomeLists();
+        await refreshHeaderStats();
       },
-
       async reset() {
         if (!confirm('Wipe all data?')) return;
         await api('/api/admin/reset', { method: 'POST' });
-        await refreshStats();
-        refreshBookings();
+        document.getElementById('admin-seed-out').innerHTML = '<em>Database reset.</em>';
+        await refreshHeaderStats();
+        await Admin.refreshBookings();
       },
-
-      async cacheClear() {
-        await api('/api/cache/clear', { method: 'POST' });
-        await refreshStats();
+      async setTtl() {
+        const v = parseInt(document.getElementById('admin-ttl').value);
+        await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ reservation_ttl_seconds: v }) });
+        await Admin.refreshSettings();
+      },
+      async refreshSettings() {
+        const r = await api('/api/settings');
+        document.getElementById('admin-settings').textContent = JSON.stringify(r.json, null, 2);
+      },
+      async refreshBookings() {
+        const r = await api('/api/bookings');
+        const list = r.json || [];
+        const html = `<table class="inv-table">
+          <thead><tr><th>id</th><th>user</th><th>home</th><th>dates</th><th>status</th><th>created</th></tr></thead>
+          <tbody>${list.map(b => `<tr>
+            <td>${b.id}</td><td>${b.user_id}</td><td>${b.home_id}</td>
+            <td>${b.start_date} → ${b.end_date}</td>
+            <td>${statusPill(b.status)}</td>
+            <td>${(b.created_at || '').replace('T',' ').slice(0,19)}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+        document.getElementById('admin-bookings').innerHTML = html;
       },
     };
 
-    async function loadSettings() {
-      const r = await api('/api/settings');
-      const s = r.json;
-      ['index', 'cache', 'concurrency', 'idempotency'].forEach((k) => {
-        const map = {
-          index: s.index_strategy,
-          cache: String(s.cache_home_detail),
-          concurrency: s.concurrency_mode,
-          idempotency: String(s.idempotency_enforced),
-        };
-        document.querySelectorAll(`#toggle-${k} button`).forEach((b) => {
-          b.classList.toggle('active', b.dataset.value === map[k]);
-        });
-      });
-      document.getElementById('ttl-input').value = s.reservation_ttl_seconds;
-    }
-
-    function bindToggles() {
-      const map = {
-        'toggle-index': 'index_strategy',
-        'toggle-cache': 'cache_home_detail',
-        'toggle-concurrency': 'concurrency_mode',
-        'toggle-idempotency': 'idempotency_enforced',
-      };
-      Object.entries(map).forEach(([id, field]) => {
-        document.querySelectorAll(`#${id} button`).forEach((b) => {
-          b.addEventListener('click', async () => {
-            let v = b.dataset.value;
-            if (v === 'true') v = true;
-            else if (v === 'false') v = false;
-            await api('/api/settings', {
-              method: 'PATCH',
-              body: JSON.stringify({ [field]: v }),
-            });
-            await loadSettings();
-          });
-        });
-      });
-      document.getElementById('ttl-input').addEventListener('change', async (e) => {
-        await api('/api/settings', {
-          method: 'PATCH',
-          body: JSON.stringify({ reservation_ttl_seconds: parseInt(e.target.value) }),
-        });
-      });
-    }
-
-    async function loadCities() {
-      // hard-coded for the seeded cities; could be derived from /api/stats
-      cityList = ['Honolulu', 'Tokyo', 'Taipei', 'Bangkok', 'Bali',
-                  'Paris', 'Lisbon', 'Barcelona', 'Reykjavik', 'Cape Town'];
-      ['A', 'B'].forEach((u) => {
-        const sel = document.getElementById(u + '-city');
-        sel.innerHTML = cityList.map((c) => `<option value="${c}">${c}</option>`).join('');
-      });
-    }
-
-    function setDefaultDates() {
-      const today = new Date();
-      const fmt = (d) => d.toISOString().slice(0, 10);
-      const d1 = new Date(today.getTime() + 86400000 * 3);
-      const d2 = new Date(today.getTime() + 86400000 * 5);
-      ['A', 'B'].forEach((u) => {
-        document.getElementById(u + '-start').value = fmt(d1);
-        document.getElementById(u + '-end').value = fmt(d2);
-      });
-    }
-
-    async function refreshStats() {
+    async function refreshHeaderStats() {
       const r = await api('/api/stats');
       const c = await api('/api/cache/stats');
       document.getElementById('stat-homes').textContent = r.json.homes;
       document.getElementById('stat-inv').textContent = r.json.inventory_rows;
       document.getElementById('stat-bookings').textContent = r.json.bookings;
-      document.getElementById('stat-cache').textContent =
-        `${c.json.size} entries, ${(c.json.hit_rate * 100).toFixed(0)}% hit`;
+      document.getElementById('stat-cache').textContent = `${c.json.size} entries / ${(c.json.hit_rate * 100).toFixed(0)}% hit`;
     }
 
-    async function refreshBookings() {
-      const r = await api('/api/bookings');
-      const list = r.json;
-      const html = `<table class="bookings-table">
-        <thead><tr>
-          <th>ID</th><th>User</th><th>Home</th><th>Dates</th><th>Status</th><th>Created</th>
-        </tr></thead><tbody>
-        ${list.map((b) => `<tr>
-          <td>${b.id}</td>
-          <td>${b.user_id}</td>
-          <td>${b.home_id}</td>
-          <td>${b.start_date} → ${b.end_date}</td>
-          <td><span class="status-pill status-${b.status}">${b.status}</span></td>
-          <td>${(b.created_at || '').replace('T', ' ').slice(0, 19)}</td>
-        </tr>`).join('')}
-      </tbody></table>`;
-      document.getElementById('bookings-list').innerHTML = html;
+    async function refreshAllHomeLists() {
+      // re-populate every tab's home dropdown for its current city
+      for (const id of ['q1', 'q2', 'q3', 'q4', 'q5']) {
+        const cityEl = document.getElementById(`${id}-city`);
+        const homeEl = document.getElementById(`${id}-home`);
+        if (cityEl && homeEl) {
+          await loadHomesForCity(cityEl.value, `${id}-home`);
+        }
+      }
     }
 
+    // ===== Init =====
     (async function init() {
-      await loadCities();
-      setDefaultDates();
-      await loadSettings();
-      bindToggles();
-      await refreshStats();
-      await refreshBookings();
-      // poll stats every 5s
-      setInterval(refreshStats, 5000);
+      ['q1', 'q2', 'q3', 'q4', 'q5'].forEach(id => {
+        fillCities(`${id}-city`);
+      });
+      ['q2', 'q3', 'q4'].forEach(id => {
+        fillDates(`${id}-start`, `${id}-end`);
+      });
+      await refreshAllHomeLists();
+      await loadSettingsToToggles();
+      await refreshHeaderStats();
+      await Q5.refreshStats();
+      Q4._renderCurrent(null);
+      setInterval(refreshHeaderStats, 5000);
     })();
   </script>
 </body>

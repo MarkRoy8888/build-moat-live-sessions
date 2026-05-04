@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .booking import cancel_booking, confirm_payment, try_reserve
+from .booking import cancel_booking, confirm_payment, finalize_booking, try_reserve
 from .cache import home_cache
 from .database import engine, get_db
 from .indexes import apply_index_strategy, explain_search
@@ -156,6 +156,24 @@ def http_confirm(
         status=booking.status,
         elapsed_ms=round(elapsed_ms, 3),
         idempotent_replay=replay,
+    )
+
+
+@router.post("/home/book/{booking_id}/finalize", response_model=ConfirmResponse)
+def http_finalize(booking_id: str, db: Session = Depends(get_db)):
+    """Step 2: paid -> booked. Internal transaction, no idempotency key needed."""
+    t0 = perf_counter()
+    booking, msg = finalize_booking(db, booking_id)
+    elapsed_ms = (perf_counter() - t0) * 1000
+
+    if booking is None:
+        raise HTTPException(404, msg)
+
+    return ConfirmResponse(
+        booking_id=booking.id,
+        status=booking.status,
+        elapsed_ms=round(elapsed_ms, 3),
+        idempotent_replay=False,
     )
 
 
