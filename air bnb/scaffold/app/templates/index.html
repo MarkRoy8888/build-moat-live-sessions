@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <title>Airbnb Booking Playground</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #fafafa;
+      --panel: #ffffff;
+      --border: #e2e2e7;
+      --accent-a: #2563eb;
+      --accent-b: #db2777;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --err: #dc2626;
+      --muted: #6b7280;
+      --code-bg: #f4f4f5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+      background: var(--bg);
+      color: #111;
+      line-height: 1.5;
+    }
+    header {
+      background: #111;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header .stats { font-size: 13px; color: #aaa; display: flex; gap: 16px; }
+    header .stats span b { color: #fff; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+    .users-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .panel h2 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel h2 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .user-a .dot { background: var(--accent-a); }
+    .user-b .dot { background: var(--accent-b); }
+    .user-a h2 { color: var(--accent-a); }
+    .user-b h2 { color: var(--accent-b); }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .row > * { flex: 1; }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+    input, select, button, textarea {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      width: 100%;
+      background: white;
+    }
+    button {
+      cursor: pointer;
+      background: #111;
+      color: white;
+      border: none;
+      font-weight: 500;
+    }
+    button:hover { background: #333; }
+    button.secondary { background: #e5e7eb; color: #111; }
+    button.secondary:hover { background: #d4d4d8; }
+    button.danger { background: var(--err); }
+    .user-a button.primary { background: var(--accent-a); }
+    .user-b button.primary { background: var(--accent-b); }
+    .button-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .button-row button { flex: 1; min-width: 80px; }
+    .log {
+      background: var(--code-bg);
+      border-radius: 4px;
+      padding: 8px;
+      max-height: 320px;
+      overflow-y: auto;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 11.5px;
+      line-height: 1.45;
+    }
+    .log-entry { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed #ddd; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry .meta { color: var(--muted); font-size: 10.5px; }
+    .log-entry .ms { font-weight: 600; }
+    .log-entry .ms.fast { color: var(--ok); }
+    .log-entry .ms.med  { color: var(--warn); }
+    .log-entry .ms.slow { color: var(--err); }
+    .log-entry .status-ok { color: var(--ok); font-weight: 600; }
+    .log-entry .status-fail { color: var(--err); font-weight: 600; }
+    .log-entry pre { margin: 4px 0 0 0; white-space: pre-wrap; word-break: break-all; }
+    .settings { position: sticky; top: 20px; align-self: flex-start; }
+    .settings .field { margin-bottom: 12px; }
+    .settings .help {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--code-bg);
+      color: #555;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+    .bench-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .bench-table th, .bench-table td {
+      text-align: right;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .bench-table th { background: var(--code-bg); font-weight: 600; }
+    .bench-table td:first-child, .bench-table th:first-child { text-align: left; font-weight: 500; }
+    .bench-table tr.fastest td { background: #ecfccb; font-weight: 600; }
+    .toggle {
+      display: inline-flex;
+      gap: 4px;
+      background: var(--code-bg);
+      padding: 2px;
+      border-radius: 6px;
+    }
+    .toggle button {
+      padding: 4px 10px;
+      font-size: 12px;
+      background: transparent;
+      color: #555;
+      border: none;
+      border-radius: 4px;
+      width: auto;
+    }
+    .toggle button.active {
+      background: white;
+      color: #111;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+    details { margin-top: 8px; }
+    details summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+    .bookings-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      margin-top: 8px;
+    }
+    .bookings-table td, .bookings-table th {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .bookings-table th { background: var(--code-bg); }
+    .status-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .status-reserved { background: #fef3c7; color: #92400e; }
+    .status-paid { background: #dbeafe; color: #1e40af; }
+    .status-booked { background: #d1fae5; color: #065f46; }
+    .status-cancelled { background: #f3f4f6; color: #4b5563; }
+    .status-rejected { background: #fee2e2; color: #991b1b; }
+    .explain-out {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛏 Airbnb Booking Playground</h1>
+    <div class="stats" id="stats">
+      <span>Homes: <b id="stat-homes">-</b></span>
+      <span>Inventory rows: <b id="stat-inv">-</b></span>
+      <span>Bookings: <b id="stat-bookings">-</b></span>
+      <span>Cache: <b id="stat-cache">-</b></span>
+    </div>
+  </header>
+
+  <main>
+    <div>
+      <div class="users-grid">
+        <!-- USER A PANEL -->
+        <section class="panel user-a">
+          <h2><span class="dot"></span> User A</h2>
+          <div class="row">
+            <div>
+              <label>City</label>
+              <select id="A-city"></select>
+            </div>
+            <div>
+              <label>Home</label>
+              <select id="A-home"></select>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Start date</label>
+              <input type="date" id="A-start" />
+            </div>
+            <div>
+              <label>End date</label>
+              <input type="date" id="A-end" />
+            </div>
+          </div>
+          <div class="button-row">
+            <button class="primary" onclick="actions.search('A')">Search</button>
+            <button class="primary" onclick="actions.detail('A')">View Detail</button>
+            <button class="primary" onclick="actions.book('A')">Reserve</button>
+          </div>
+          <div class="button-row" style="margin-top: 6px;">
+            <button class="secondary" onclick="actions.confirm('A')">Confirm Pay</button>
+            <button class="secondary" onclick="actions.cancel('A')">Cancel</button>
+            <button class="secondary" onclick="actions.confirmDup('A')">Replay Webhook</button>
+          </div>
+          <h2 style="margin-top: 12px;">Activity Log</h2>
+          <div class="log" id="A-log"></div>
+        </section>
+
+        <!-- USER B PANEL -->
+        <section class="panel user-b">
+          <h2><span class="dot"></span> User B</h2>
+          <div class="row">
+            <div>
+              <label>City</label>
+              <select id="B-city"></select>
+            </div>
+            <div>
+              <label>Home</label>
+              <select id="B-home"></select>
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label>Start date</label>
+              <input type="date" id="B-start" />
+            </div>
+            <div>
+              <label>End date</label>
+              <input type="date" id="B-end" />
+            </div>
+          </div>
+          <div class="button-row">
+            <button class="primary" onclick="actions.search('B')">Search</button>
+            <button class="primary" onclick="actions.detail('B')">View Detail</button>
+            <button class="primary" onclick="actions.book('B')">Reserve</button>
+          </div>
+          <div class="button-row" style="margin-top: 6px;">
+            <button class="secondary" onclick="actions.confirm('B')">Confirm Pay</button>
+            <button class="secondary" onclick="actions.cancel('B')">Cancel</button>
+            <button class="secondary" onclick="actions.confirmDup('B')">Replay Webhook</button>
+          </div>
+          <h2 style="margin-top: 12px;">Activity Log</h2>
+          <div class="log" id="B-log"></div>
+        </section>
+      </div>
+
+      <!-- SHARED PANELS -->
+      <section class="panel" style="margin-top: 16px;">
+        <h2>⚡ Race Test &mdash; A &amp; B 同時搶同一個房</h2>
+        <div class="help" style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+          設定相同的 home + 日期後按下,兩個 booking 同時送出。觀察 logical / naive 模式下的不同結果。
+        </div>
+        <button onclick="actions.race()">🏁 Race A vs B (use A's settings)</button>
+      </section>
+
+      <section class="panel" style="margin-top: 16px;">
+        <h2>📊 Index Benchmark &mdash; 跑所有 index 策略,看 ms 差別</h2>
+        <div class="row">
+          <div>
+            <label>Runs per strategy</label>
+            <input type="number" id="bench-runs" value="30" min="5" max="200" />
+          </div>
+          <div>
+            <label>Date range (nights)</label>
+            <input type="number" id="bench-nights" value="5" min="1" max="30" />
+          </div>
+          <div style="display: flex; align-items: end;">
+            <button onclick="actions.bench()">Run Benchmark</button>
+          </div>
+        </div>
+        <div id="bench-out" style="margin-top: 10px;"></div>
+      </section>
+
+      <section class="panel" style="margin-top: 16px;">
+        <h2>🔍 EXPLAIN QUERY PLAN &mdash; 看當前 index 在 query 裡有沒有被用到</h2>
+        <button class="secondary" onclick="actions.explain()">Explain current search query</button>
+        <div id="explain-out"></div>
+      </section>
+
+      <section class="panel" style="margin-top: 16px;">
+        <h2>📋 Recent Bookings</h2>
+        <div id="bookings-list"></div>
+      </section>
+    </div>
+
+    <!-- SETTINGS SIDEBAR -->
+    <aside class="settings panel">
+      <h2>⚙ Settings (live-toggle)</h2>
+
+      <div class="field">
+        <label>Q3: Index Strategy</label>
+        <div class="toggle" id="toggle-index">
+          <button data-value="none">none</button>
+          <button data-value="simple">simple</button>
+          <button data-value="compound">compound</button>
+          <button data-value="covering">cover</button>
+          <button data-value="partial">partial</button>
+        </div>
+        <div class="help">none = full scan, simple = 1-col, compound = (city,date,status), covering = +home_id, partial = WHERE status='available'</div>
+      </div>
+
+      <div class="field">
+        <label>Q5: Cache Home Detail</label>
+        <div class="toggle" id="toggle-cache">
+          <button data-value="true">on</button>
+          <button data-value="false">off</button>
+        </div>
+        <div class="help">On: 第二次 GET /home/{id} 走記憶體,觀察 ms 差異</div>
+      </div>
+
+      <div class="field">
+        <label>Q2: Concurrency Mode</label>
+        <div class="toggle" id="toggle-concurrency">
+          <button data-value="logical">logical (✓)</button>
+          <button data-value="naive">naive (race!)</button>
+        </div>
+        <div class="help">naive = SELECT then UPDATE,race window 開放,A vs B 同搶會雙雙成功</div>
+      </div>
+
+      <div class="field">
+        <label>Q4: Idempotency Enforced</label>
+        <div class="toggle" id="toggle-idempotency">
+          <button data-value="true">on</button>
+          <button data-value="false">off</button>
+        </div>
+        <div class="help">On: 同 idempotency_key 第二次 confirm 直接回上次結果</div>
+      </div>
+
+      <div class="field">
+        <label>Reservation TTL (seconds)</label>
+        <input type="number" id="ttl-input" min="5" max="3600" value="600" />
+        <div class="help">過期後 row 變邏輯可訂,下一個 booking 自動 take over</div>
+      </div>
+
+      <h2 style="margin-top: 16px;">🌱 Seed Data</h2>
+      <div class="button-row">
+        <button class="secondary" onclick="actions.seed('small')">Seed Small (50)</button>
+        <button class="secondary" onclick="actions.seed('large')">Seed Large (10K)</button>
+      </div>
+      <div class="button-row" style="margin-top: 6px;">
+        <button class="danger" onclick="actions.reset()">Reset DB</button>
+        <button class="secondary" onclick="actions.cacheClear()">Clear Cache</button>
+      </div>
+      <div class="help" style="margin-top: 6px;">
+        Large seed (3.65M rows) 拿來看 index strategy 的 ms 差距才明顯。需要 ~30s。
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const BASE = '';
+    const api = async (path, opts = {}) => {
+      const t0 = performance.now();
+      const r = await fetch(BASE + path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      const elapsed = performance.now() - t0;
+      const text = await r.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch { json = { raw: text }; }
+      return { ok: r.ok, status: r.status, json, networkMs: elapsed };
+    };
+
+    const userColors = { A: 'user-a', B: 'user-b' };
+    const userTags = { A: 'U_A', B: 'U_B' };
+
+    function logEntry(user, label, payload) {
+      const el = document.getElementById(user + '-log');
+      const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+      const elapsed = payload.elapsed_ms ?? payload.networkMs ?? 0;
+      const speed = elapsed < 5 ? 'fast' : elapsed < 50 ? 'med' : 'slow';
+      const cacheTag = payload.cache_hit === true ? '<span class="badge">CACHE HIT</span>'
+                    : payload.cache_hit === false ? '<span class="badge">CACHE MISS</span>'
+                    : '';
+      const idemTag = payload.idempotent_replay ? '<span class="badge">IDEMPOTENT REPLAY</span>' : '';
+      const statusCls = payload.ok === false ? 'status-fail' : 'status-ok';
+      const statusText = payload.ok === false ? `FAIL: ${payload.detail || payload.json?.detail || 'error'}` : 'OK';
+      const detail = payload.detail ? `<div>${payload.detail}</div>` : '';
+      const body = payload.body
+        ? `<details><summary>response</summary><pre>${JSON.stringify(payload.body, null, 2)}</pre></details>`
+        : '';
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <div class="meta">${time} · ${label}
+          <span class="ms ${speed}">${elapsed.toFixed(2)} ms</span>
+          ${cacheTag}${idemTag}
+          <span class="${statusCls}">${statusText}</span>
+        </div>
+        ${detail}
+        ${body}
+      `;
+      el.prepend(entry);
+    }
+
+    let cityList = [];
+    let lastBookingByUser = { A: null, B: null };
+    let lastConfirmKey = { A: null, B: null };
+
+    const actions = {
+      async search(user) {
+        const city = document.getElementById(user + '-city').value;
+        const start = document.getElementById(user + '-start').value;
+        const end = document.getElementById(user + '-end').value;
+        const r = await api(`/home/search?city=${encodeURIComponent(city)}&startDate=${start}&endDate=${end}&pageSize=10&page=1`);
+        const j = r.json;
+        logEntry(user, `SEARCH ${city} ${start}→${end}`, {
+          elapsed_ms: j.elapsed_ms,
+          detail: r.ok ? `${j.total} hits, index=${j.index_strategy}` : null,
+          ok: r.ok,
+          body: r.ok ? j.results : j,
+        });
+        if (r.ok && j.results.length) {
+          // populate home dropdown for that user
+          const sel = document.getElementById(user + '-home');
+          sel.innerHTML = j.results
+            .map((h) => `<option value="${h.home_id}">${h.home_id} · ${h.address}</option>`)
+            .join('');
+        }
+      },
+
+      async detail(user) {
+        const homeId = document.getElementById(user + '-home').value;
+        if (!homeId) return alert('Search first to populate home list');
+        const r = await api(`/home/${homeId}`);
+        const j = r.json;
+        logEntry(user, `GET DETAIL ${homeId}`, {
+          elapsed_ms: j.elapsed_ms,
+          cache_hit: j.cache_hit,
+          ok: r.ok,
+          body: j.home,
+        });
+        refreshStats();
+      },
+
+      async book(user) {
+        const homeId = document.getElementById(user + '-home').value;
+        const start = document.getElementById(user + '-start').value;
+        const end = document.getElementById(user + '-end').value;
+        if (!homeId) return alert('Search first to populate home list');
+        const r = await api('/home/book', {
+          method: 'POST',
+          body: JSON.stringify({
+            home_id: homeId,
+            start_date: start,
+            end_date: end,
+            user_id: userTags[user],
+          }),
+        });
+        const j = r.json;
+        if (r.ok && j.booking_id) lastBookingByUser[user] = j.booking_id;
+        logEntry(user, `RESERVE ${homeId} ${start}→${end}`, {
+          elapsed_ms: j.elapsed_ms,
+          ok: r.ok && j.status !== 'rejected',
+          detail: `status=${j.status} mode=${j.concurrency_mode} ${j.detail || ''}`,
+          body: j,
+        });
+        refreshBookings();
+      },
+
+      async confirm(user) {
+        const id = lastBookingByUser[user];
+        if (!id) return alert('Reserve first');
+        const key = 'evt_' + Math.random().toString(36).slice(2, 10);
+        lastConfirmKey[user] = key;
+        const r = await api(`/home/book/${id}/confirm`, {
+          method: 'POST',
+          body: JSON.stringify({ idempotency_key: key }),
+        });
+        const j = r.json;
+        logEntry(user, `CONFIRM ${id}`, {
+          elapsed_ms: j.elapsed_ms,
+          ok: r.ok,
+          idempotent_replay: j.idempotent_replay,
+          detail: `status=${j.status} key=${key}`,
+          body: j,
+        });
+        refreshBookings();
+      },
+
+      async confirmDup(user) {
+        const id = lastBookingByUser[user];
+        const key = lastConfirmKey[user];
+        if (!id || !key) return alert('Need a confirmed booking first');
+        const r = await api(`/home/book/${id}/confirm`, {
+          method: 'POST',
+          body: JSON.stringify({ idempotency_key: key }),
+        });
+        const j = r.json;
+        logEntry(user, `REPLAY CONFIRM ${id}`, {
+          elapsed_ms: j.elapsed_ms,
+          ok: r.ok,
+          idempotent_replay: j.idempotent_replay,
+          detail: `status=${j.status} key=${key}`,
+          body: j,
+        });
+      },
+
+      async cancel(user) {
+        const id = lastBookingByUser[user];
+        if (!id) return alert('Reserve first');
+        const r = await api(`/home/book/${id}/cancel`, { method: 'POST' });
+        const j = r.json;
+        logEntry(user, `CANCEL ${id}`, {
+          elapsed_ms: j.elapsed_ms,
+          ok: r.ok,
+          detail: `status=${j.status}`,
+          body: j,
+        });
+        refreshBookings();
+      },
+
+      async race() {
+        const homeId = document.getElementById('A-home').value;
+        const start = document.getElementById('A-start').value;
+        const end = document.getElementById('A-end').value;
+        if (!homeId) return alert('Search first');
+        // fire both bookings simultaneously
+        const reqA = api('/home/book', {
+          method: 'POST',
+          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_A' }),
+        });
+        const reqB = api('/home/book', {
+          method: 'POST',
+          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_B' }),
+        });
+        const [rA, rB] = await Promise.all([reqA, reqB]);
+        if (rA.ok && rA.json.booking_id) lastBookingByUser['A'] = rA.json.booking_id;
+        if (rB.ok && rB.json.booking_id) lastBookingByUser['B'] = rB.json.booking_id;
+        logEntry('A', `🏁 RACE ${homeId}`, {
+          elapsed_ms: rA.json.elapsed_ms,
+          ok: rA.ok && rA.json.status !== 'rejected',
+          detail: `status=${rA.json.status} ${rA.json.detail || ''}`,
+          body: rA.json,
+        });
+        logEntry('B', `🏁 RACE ${homeId}`, {
+          elapsed_ms: rB.json.elapsed_ms,
+          ok: rB.ok && rB.json.status !== 'rejected',
+          detail: `status=${rB.json.status} ${rB.json.detail || ''}`,
+          body: rB.json,
+        });
+        refreshBookings();
+      },
+
+      async bench() {
+        const runs = parseInt(document.getElementById('bench-runs').value) || 30;
+        const nights = parseInt(document.getElementById('bench-nights').value) || 5;
+        document.getElementById('bench-out').innerHTML = '<em>Running…</em>';
+        const r = await api(`/api/bench?runs=${runs}&nights=${nights}`, { method: 'POST' });
+        if (!r.ok) {
+          document.getElementById('bench-out').innerHTML = '<em>Failed.</em>';
+          return;
+        }
+        const results = r.json.results;
+        const fastest = results.reduce((a, b) => (a.avg_ms < b.avg_ms ? a : b));
+        let html = '<table class="bench-table"><thead><tr>'
+          + '<th>Index Strategy</th><th>Runs</th><th>Avg ms</th><th>Min ms</th><th>Max ms</th><th>vs fastest</th>'
+          + '</tr></thead><tbody>';
+        for (const row of results) {
+          const ratio = (row.avg_ms / fastest.avg_ms).toFixed(2);
+          const cls = row.label === fastest.label ? 'fastest' : '';
+          html += `<tr class="${cls}"><td>${row.label}</td><td>${row.runs}</td>`
+               + `<td>${row.avg_ms}</td><td>${row.min_ms}</td><td>${row.max_ms}</td>`
+               + `<td>${ratio}×</td></tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('bench-out').innerHTML = html;
+      },
+
+      async explain() {
+        const r = await api('/api/explain');
+        const j = r.json;
+        const out = document.getElementById('explain-out');
+        out.innerHTML = `<div class="explain-out">${j.plan.join('\n')}</div>`
+          + `<div class="help" style="margin-top:4px;">Active strategy: <b>${j.index_strategy}</b>. Look for "USING INDEX" / "USING COVERING INDEX" vs "SCAN".</div>`;
+      },
+
+      async seed(scale) {
+        const r = await api(`/api/admin/seed?scale=${scale}`, { method: 'POST' });
+        alert(JSON.stringify(r.json));
+        await loadCities();
+        await refreshStats();
+      },
+
+      async reset() {
+        if (!confirm('Wipe all data?')) return;
+        await api('/api/admin/reset', { method: 'POST' });
+        await refreshStats();
+        refreshBookings();
+      },
+
+      async cacheClear() {
+        await api('/api/cache/clear', { method: 'POST' });
+        await refreshStats();
+      },
+    };
+
+    async function loadSettings() {
+      const r = await api('/api/settings');
+      const s = r.json;
+      ['index', 'cache', 'concurrency', 'idempotency'].forEach((k) => {
+        const map = {
+          index: s.index_strategy,
+          cache: String(s.cache_home_detail),
+          concurrency: s.concurrency_mode,
+          idempotency: String(s.idempotency_enforced),
+        };
+        document.querySelectorAll(`#toggle-${k} button`).forEach((b) => {
+          b.classList.toggle('active', b.dataset.value === map[k]);
+        });
+      });
+      document.getElementById('ttl-input').value = s.reservation_ttl_seconds;
+    }
+
+    function bindToggles() {
+      const map = {
+        'toggle-index': 'index_strategy',
+        'toggle-cache': 'cache_home_detail',
+        'toggle-concurrency': 'concurrency_mode',
+        'toggle-idempotency': 'idempotency_enforced',
+      };
+      Object.entries(map).forEach(([id, field]) => {
+        document.querySelectorAll(`#${id} button`).forEach((b) => {
+          b.addEventListener('click', async () => {
+            let v = b.dataset.value;
+            if (v === 'true') v = true;
+            else if (v === 'false') v = false;
+            await api('/api/settings', {
+              method: 'PATCH',
+              body: JSON.stringify({ [field]: v }),
+            });
+            await loadSettings();
+          });
+        });
+      });
+      document.getElementById('ttl-input').addEventListener('change', async (e) => {
+        await api('/api/settings', {
+          method: 'PATCH',
+          body: JSON.stringify({ reservation_ttl_seconds: parseInt(e.target.value) }),
+        });
+      });
+    }
+
+    async function loadCities() {
+      // hard-coded for the seeded cities; could be derived from /api/stats
+      cityList = ['Honolulu', 'Tokyo', 'Taipei', 'Bangkok', 'Bali',
+                  'Paris', 'Lisbon', 'Barcelona', 'Reykjavik', 'Cape Town'];
+      ['A', 'B'].forEach((u) => {
+        const sel = document.getElementById(u + '-city');
+        sel.innerHTML = cityList.map((c) => `<option value="${c}">${c}</option>`).join('');
+      });
+    }
+
+    function setDefaultDates() {
+      const today = new Date();
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      const d1 = new Date(today.getTime() + 86400000 * 3);
+      const d2 = new Date(today.getTime() + 86400000 * 5);
+      ['A', 'B'].forEach((u) => {
+        document.getElementById(u + '-start').value = fmt(d1);
+        document.getElementById(u + '-end').value = fmt(d2);
+      });
+    }
+
+    async function refreshStats() {
+      const r = await api('/api/stats');
+      const c = await api('/api/cache/stats');
+      document.getElementById('stat-homes').textContent = r.json.homes;
+      document.getElementById('stat-inv').textContent = r.json.inventory_rows;
+      document.getElementById('stat-bookings').textContent = r.json.bookings;
+      document.getElementById('stat-cache').textContent =
+        `${c.json.size} entries, ${(c.json.hit_rate * 100).toFixed(0)}% hit`;
+    }
+
+    async function refreshBookings() {
+      const r = await api('/api/bookings');
+      const list = r.json;
+      const html = `<table class="bookings-table">
+        <thead><tr>
+          <th>ID</th><th>User</th><th>Home</th><th>Dates</th><th>Status</th><th>Created</th>
+        </tr></thead><tbody>
+        ${list.map((b) => `<tr>
+          <td>${b.id}</td>
+          <td>${b.user_id}</td>
+          <td>${b.home_id}</td>
+          <td>${b.start_date} → ${b.end_date}</td>
+          <td><span class="status-pill status-${b.status}">${b.status}</span></td>
+          <td>${(b.created_at || '').replace('T', ' ').slice(0, 19)}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+      document.getElementById('bookings-list').innerHTML = html;
+    }
+
+    (async function init() {
+      await loadCities();
+      setDefaultDates();
+      await loadSettings();
+      bindToggles();
+      await refreshStats();
+      await refreshBookings();
+      // poll stats every 5s
+      setInterval(refreshStats, 5000);
+    })();
+  </script>
+</body>
+</html>
