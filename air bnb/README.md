@@ -40,10 +40,13 @@ pip install -r requirements.txt
 ### Run and Verify
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8765
 ```
 
-Then run the verification tests from `PROMPT.md`.
+The default port `8000` often clashes with other dev servers (the QR exercise uses it too).
+We use `8765` throughout — feel free to pick any free port, just match it in the curl examples.
+
+Then run the verification tests from `PROMPT.md` and open <http://localhost:8765/> for the playground UI.
 
 ## Scope Reminder
 

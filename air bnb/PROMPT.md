@@ -1,4 +1,4 @@
-# Airbnb Booking Platform Prototype
+﻿# Airbnb Booking Platform Prototype
 
 ## System Requirements
 
@@ -51,64 +51,64 @@ Your prototype should pass all of these:
 # --- Setup: seed a few homes and inventory (the scaffold does this on boot) ---
 
 # Search homes in a city for a date range
-curl "http://localhost:8000/home/search?city=Honolulu&startDate=2026-09-01&endDate=2026-09-05&pageSize=10&page=1"
+curl "http://localhost:8765/home/search?city=Honolulu&startDate=2026-09-01&endDate=2026-09-05&pageSize=10&page=1"
 # → 200, returns Home[]
 
 # Get home details
-curl http://localhost:8000/home/{home_id}
+curl http://localhost:8765/home/{home_id}
 # → 200, returns {"id": "...", "city": "...", "address": "...", "type": "...", "amenities": [...]}
 
 # Reserve a home for a date range
-curl -X POST http://localhost:8000/home/book \
+curl -X POST http://localhost:8765/home/book \
   -H "Content-Type: application/json" \
   -d '{"home_id":"H1","start_date":"2026-09-01","end_date":"2026-09-05","user_id":"U1"}'
 # → 200, returns {"booking_id": "...", "status": "reserved", "expires_at": "..."}
 
 # Confirm payment within 10 minutes
-curl -X POST http://localhost:8000/home/book/{booking_id}/confirm
+curl -X POST http://localhost:8765/home/book/{booking_id}/confirm
 # → 200, returns {"booking_id": "...", "status": "paid"}
 # Inventory rows for those dates now have status = "booked"
 
 # Search now excludes those dates
-curl "http://localhost:8000/home/search?city=Honolulu&startDate=2026-09-01&endDate=2026-09-05&pageSize=10&page=1"
+curl "http://localhost:8765/home/search?city=Honolulu&startDate=2026-09-01&endDate=2026-09-05&pageSize=10&page=1"
 # → 200, H1 NOT in results
 
 # --- Concurrency: two users race for the same dates ---
 
 # User A reserves
-curl -X POST http://localhost:8000/home/book \
+curl -X POST http://localhost:8765/home/book \
   -H "Content-Type: application/json" \
   -d '{"home_id":"H2","start_date":"2026-10-01","end_date":"2026-10-03","user_id":"U_A"}'
 # → 200 reserved
 
 # User B tries the same dates immediately
-curl -X POST http://localhost:8000/home/book \
+curl -X POST http://localhost:8765/home/book \
   -H "Content-Type: application/json" \
   -d '{"home_id":"H2","start_date":"2026-10-01","end_date":"2026-10-03","user_id":"U_B"}'
 # → 409 Conflict, body: {"detail": "Dates not available"}
 
 # User A abandons (or 10 minutes pass, then any new booking attempt re-checks logical availability)
-curl -X POST http://localhost:8000/home/book/{A_booking_id}/cancel
+curl -X POST http://localhost:8765/home/book/{A_booking_id}/cancel
 # → 200, status: "cancelled"
 
 # User B retries — now succeeds
-curl -X POST http://localhost:8000/home/book \
+curl -X POST http://localhost:8765/home/book \
   -H "Content-Type: application/json" \
   -d '{"home_id":"H2","start_date":"2026-10-01","end_date":"2026-10-03","user_id":"U_B"}'
 # → 200 reserved
 
 # --- Idempotency: payment webhook fires twice ---
 
-curl -X POST http://localhost:8000/home/book/{booking_id}/confirm \
+curl -X POST http://localhost:8765/home/book/{booking_id}/confirm \
   -H "Idempotency-Key: webhook-evt-12345"
 # → 200, status: "paid"
 
-curl -X POST http://localhost:8000/home/book/{booking_id}/confirm \
+curl -X POST http://localhost:8765/home/book/{booking_id}/confirm \
   -H "Idempotency-Key: webhook-evt-12345"
 # → 200, same response (NOT a second charge / NOT a 409)
 
 # --- Non-existent home ---
-curl -o /dev/null -w "%{http_code}" http://localhost:8000/home/DOES_NOT_EXIST
+curl -o /dev/null -w "%{http_code}" http://localhost:8765/home/DOES_NOT_EXIST
 # → 404
 ```
 
