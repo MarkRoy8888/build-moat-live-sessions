@@ -364,16 +364,29 @@
             <select id="q1-city"></select>
           </div>
           <div>
-            <label>查詢的日期跨度 (天)</label>
+            <label>查詢日期跨度 (天)</label>
             <input type="number" id="q1-nights" min="1" max="30" value="5" />
           </div>
           <div>
             <label>每種策略跑幾次</label>
             <input type="number" id="q1-runs" min="5" max="500" value="50" />
           </div>
+          <div>
+            <label>bookings 目標筆數</label>
+            <input type="number" id="q1-target-bookings" min="0" max="200000" step="500" value="2000" />
+          </div>
           <div style="display:flex; align-items:end;">
             <button onclick="Q1.compare()">Run comparison</button>
           </div>
+        </div>
+        <div class="help">
+          <b>怎麼讓差距明顯?</b><br>
+          • <b>bookings 目標筆數</b>:range 的 NOT EXISTS 會掃 bookings 表,筆數越多越慢。Per-day 不受影響。預設 2000,差距已肉眼可見;設到 20000-50000 差距會炸開 (range 慢 10-100×)。<br>
+          • <b>更兇的玩法</b>:先去 Admin tab 按 <b>Seed Large</b> 灌 3.65M inventory rows + 10K homes,然後回來把 bookings 目標筆數設到 50000。Range 的 overlap subquery 會變得超慢。<br>
+          • 自動補資料只執行一次,後續同一個 target 直接用現有 bookings。要重來按 <b>Reset bookings (only)</b>。
+        </div>
+        <div class="button-row" style="margin-top:8px;">
+          <button class="danger" onclick="Q1.resetBookings()">Reset bookings (only) — 不影響 inventory / homes</button>
         </div>
         <div id="q1-compare-out"></div>
       </div>
@@ -927,13 +940,23 @@
         document.getElementById('q1-out').innerHTML = html;
       },
 
+      async resetBookings() {
+        if (!confirm('清掉所有 bookings (含 demo 資料)?\ninventory 跟 homes 不會動。')) return;
+        await api('/api/admin/reset_bookings', { method: 'POST' });
+        document.getElementById('q1-compare-out').innerHTML = '<em>Bookings 表已清空。下次跑 compare 會重新灌資料。</em>';
+        Admin.refreshBookings && Admin.refreshBookings();
+      },
+
       async compare() {
         const city = document.getElementById('q1-city').value;
         const nights = parseInt(document.getElementById('q1-nights').value) || 5;
         const runs = parseInt(document.getElementById('q1-runs').value) || 50;
+        const targetBookings = parseInt(document.getElementById('q1-target-bookings').value) || 2000;
         const out = document.getElementById('q1-compare-out');
-        out.innerHTML = '<em>跑兩個 SQL 對比中...會自動補測試資料,首次可能 1-3 秒。</em>';
-        const r = await api(`/api/q1/compare?city=${encodeURIComponent(city)}&nights=${nights}&runs=${runs}`, { method: 'POST' });
+        out.innerHTML = `<em>準備中...如果 bookings 表少於 ${targetBookings} 筆,會先補滿 (數萬筆可能要 5-30 秒)。</em>`;
+        const t0 = performance.now();
+        const r = await api(`/api/q1/compare?city=${encodeURIComponent(city)}&nights=${nights}&runs=${runs}&target_bookings=${targetBookings}`, { method: 'POST' });
+        const totalMs = (performance.now() - t0).toFixed(0);
         if (!r.ok) {
           out.innerHTML = `<em>失敗:${JSON.stringify(r.json)}</em>`;
           return;
@@ -968,6 +991,10 @@
           ? `🏆 <b>Range rows 贏</b> — 比 per-day 快 <b>${ratio}×</b>。<br><b>但這是小資料的假象</b>:bookings 表只有 ${j.bookings_in_db} 筆,overlap 檢查的工作量小;當 bookings 增長到數萬筆,per-day 的 range scan 會大幅領先。`
           : `兩者差不多`;
 
+        const seedNote = j.seeded_demo_bookings > 0
+          ? ` (含 <b>${j.seeded_demo_bookings}</b> 筆本次補的 demo,seeding 花了 ${j.seed_elapsed_ms}ms)`
+          : ' (用現有 bookings,無需補資料)';
+
         out.innerHTML = `
           <div style="display:flex; gap:12px; margin-top:8px;">
             ${renderCard('A · Per-day rows', 'var(--user-a)', j.per_day, winA)}
@@ -977,7 +1004,9 @@
             <b>結論:</b>${verdict}
           </div>
           <div class="help" style="margin-top:6px;">
-            參數:city=${j.city}, ${j.start} → ${j.end} (${j.nights} 晚), 每種跑 ${j.runs_per_query} 次, bookings 表共 ${j.bookings_in_db} 筆 (含 ${j.seeded_demo_bookings} 筆自動補的 demo 資料)
+            參數:city=<b>${j.city}</b>, ${j.start} → ${j.end} (${j.nights} 晚), 每種跑 <b>${j.runs_per_query}</b> 次,
+            bookings 表共 <b>${j.bookings_in_db}</b> 筆${seedNote}。
+            HTTP round-trip 總共 ${totalMs}ms。
           </div>
         `;
       },

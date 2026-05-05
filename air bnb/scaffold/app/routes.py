@@ -348,6 +348,27 @@ def http_reset(db: Session = Depends(get_db)):
     return seed_reset(db)
 
 
+@router.post("/api/admin/reset_bookings")
+def http_reset_bookings(db: Session = Depends(get_db)):
+    """Wipe ONLY bookings + webhook_events, leave inventory + homes intact.
+
+    Useful for re-running Q1 compare with a different target_bookings count
+    without losing the seeded inventory window.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM webhook_events"))
+        conn.execute(text("DELETE FROM bookings"))
+        conn.execute(
+            text(
+                "UPDATE inventory SET status = 'available', "
+                "holder = NULL, expires_at = NULL "
+                "WHERE status != 'available'"
+            )
+        )
+    home_cache.clear()
+    return {"reset": "bookings + webhook_events + reset reserved/booked inventory"}
+
+
 @router.post("/api/bench", response_model=BenchResponse)
 def http_bench(runs: int = 30, nights: int = 5, db: Session = Depends(get_db)):
     from .bench import run_benchmark
@@ -366,6 +387,17 @@ def http_q1_compare(
     city: str = "Honolulu",
     nights: int = 5,
     runs: int = 50,
+    target_bookings: int = Query(
+        2000,
+        ge=0,
+        le=200000,
+        description=(
+            "Auto-seed demo bookings (across ALL cities) up to this count "
+            "before running the comparison. The range NOT EXISTS subquery "
+            "scales with bookings count per home; per-day stays constant. "
+            "Crank this up to make the difference visible."
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """Compare per-day rows vs range-table query, both targeting 'find homes
@@ -383,36 +415,82 @@ def http_q1_compare(
 
     bookings_count = db.execute(text("SELECT COUNT(*) FROM bookings")).scalar() or 0
     seeded_extra = 0
-    if bookings_count < 30:
-        rng_seed = 13
-        homes = db.execute(
-            text("SELECT id FROM homes WHERE city = :city LIMIT 50"),
-            {"city": city},
-        ).fetchall()
-        if homes:
-            from random import Random
-            from secrets import token_hex
-            from datetime import datetime as dt
-            rng = Random(rng_seed)
-            for _ in range(50):
-                h = rng.choice(homes)[0]
-                offset = rng.randint(20, 28)
-                length = rng.randint(2, 5)
+    seed_elapsed_ms = 0.0
+    if bookings_count < target_bookings:
+        from datetime import datetime as dt
+        from random import Random
+        from secrets import token_hex
+
+        rng = Random(13)
+        # Seed bookings spread across ALL cities (not just :city) to mimic a
+        # real bookings table in a multi-city system, and to give the range
+        # NOT EXISTS scan more rows to chew through per home.
+        #
+        # Critically: keep seeded bookings AFTER the query window. A booking
+        # that overlaps the query date short-circuits NOT EXISTS quickly,
+        # masking the real cost. Bookings that DON'T overlap force NOT EXISTS
+        # to scan every booking row for that home before concluding 'no
+        # overlap'. That's the slow path we want to demonstrate.
+        all_homes = db.execute(text("SELECT id FROM homes LIMIT 50000")).fetchall()
+        if all_homes:
+            inv_window_days = (
+                db.execute(
+                    text("SELECT COUNT(DISTINCT date) FROM inventory")
+                ).scalar()
+                or 30
+            )
+            # Seed only into days > nights (after the default query window).
+            min_offset = nights + 1
+            max_offset = max(min_offset + 1, inv_window_days - 1)
+            target_to_add = target_bookings - bookings_count
+            t_seed_start = perf_counter()
+            batch = []
+            for _ in range(target_to_add):
+                h = rng.choice(all_homes)[0]
+                offset = rng.randint(min_offset, max_offset)
+                length = rng.randint(1, 3)
                 s = today + timedelta(days=offset)
                 e = s + timedelta(days=length - 1)
-                bid = "FAKE_" + token_hex(6)
+                bid = "FAKE_" + token_hex(8)
+                batch.append(
+                    {
+                        "id": bid,
+                        "h": h,
+                        "s": s,
+                        "e": e,
+                        "now": dt.utcnow(),
+                    }
+                )
+                if len(batch) >= 500:
+                    try:
+                        db.execute(
+                            text(
+                                "INSERT INTO bookings (id, home_id, user_id, "
+                                "start_date, end_date, status, created_at) "
+                                "VALUES (:id, :h, 'demo', :s, :e, 'booked', :now)"
+                            ),
+                            batch,
+                        )
+                        seeded_extra += len(batch)
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+                    batch = []
+            if batch:
                 try:
                     db.execute(
                         text(
-                            "INSERT INTO bookings (id, home_id, user_id, start_date, end_date, status, created_at) "
+                            "INSERT INTO bookings (id, home_id, user_id, "
+                            "start_date, end_date, status, created_at) "
                             "VALUES (:id, :h, 'demo', :s, :e, 'booked', :now)"
                         ),
-                        {"id": bid, "h": h, "s": s, "e": e, "now": dt.utcnow()},
+                        batch,
                     )
-                    seeded_extra += 1
+                    seeded_extra += len(batch)
+                    db.commit()
                 except Exception:
                     db.rollback()
-            db.commit()
+            seed_elapsed_ms = round((perf_counter() - t_seed_start) * 1000, 1)
 
     per_day_sql = text(
         """
@@ -483,8 +561,10 @@ def http_q1_compare(
         "end": str(end_date),
         "nights": nights,
         "runs_per_query": runs,
+        "target_bookings": target_bookings,
         "bookings_in_db": bookings_count + seeded_extra,
         "seeded_demo_bookings": seeded_extra,
+        "seed_elapsed_ms": seed_elapsed_ms,
         "per_day": {
             **per_day_stats,
             "result_count": len(per_day_rows),
