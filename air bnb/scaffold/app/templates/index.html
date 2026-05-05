@@ -742,12 +742,36 @@
       </div>
 
       <div class="panel">
+        <h3>③ 🏁 一鍵對比:Cache on vs off (各 100 次同房 GET)</h3>
+        <div class="help" style="margin-bottom:8px;">
+          單次 GET 的 ms 差距小看不出來,跑 100 次累積差距就很明顯。
+          按下後系統會:
+          <b>(a)</b> 切到 cache on → clear cache → 跑 100 次 (1 miss + 99 hits) →
+          <b>(b)</b> 切到 cache off → 跑 100 次 (100 misses) →
+          <b>(c)</b> 還原原本的 cache 設定。
+          通常會看到 cache on 比 off 快 50-200 倍。
+        </div>
+        <div class="button-row">
+          <button class="primary-blue" onclick="Q5.compareOnOff()">🏁 Compare cache on vs off (100 calls each)</button>
+        </div>
+        <div id="q5-compare-out"></div>
+      </div>
+
+      <div class="panel">
+        <h3>本 session 累積 stats (每按一次 GET 都會加進來)</h3>
+        <div id="q5-accum"></div>
+        <div class="button-row" style="margin-top:6px;">
+          <button class="secondary" onclick="Q5.resetAccumulator()">重置累積</button>
+        </div>
+      </div>
+
+      <div class="panel">
         <h3>Activity log (CACHE MISS 慢、CACHE HIT 飛快)</h3>
         <div class="log" id="q5-log"></div>
       </div>
 
       <div class="panel">
-        <h3>Cache stats (即時)</h3>
+        <h3>Cache stats (server 端即時 — size / hits / misses / hit rate)</h3>
         <div id="q5-stats"></div>
       </div>
     </section>
@@ -1362,14 +1386,61 @@
 
     // ===== Q5 =====
     const Q5 = {
+      stats: { calls: 0, totalMs: 0, hitMs: 0, hitCount: 0, missMs: 0, missCount: 0 },
+
+      _updateAccumulator(elapsedMs, cacheHit) {
+        this.stats.calls += 1;
+        this.stats.totalMs += elapsedMs;
+        if (cacheHit) {
+          this.stats.hitMs += elapsedMs;
+          this.stats.hitCount += 1;
+        } else {
+          this.stats.missMs += elapsedMs;
+          this.stats.missCount += 1;
+        }
+        this._renderAccumulator();
+      },
+
+      _renderAccumulator() {
+        const s = this.stats;
+        const hitAvg = s.hitCount ? (s.hitMs / s.hitCount) : 0;
+        const missAvg = s.missCount ? (s.missMs / s.missCount) : 0;
+        const totalAvg = s.calls ? (s.totalMs / s.calls) : 0;
+        // Estimated saving: if every call had been a miss, total would be N * missAvg.
+        // Actual was totalMs. Saved = max(0, N * missAvg - totalMs).
+        const wouldBeMs = s.calls * (missAvg || hitAvg || 0);
+        const saved = Math.max(0, wouldBeMs - s.totalMs);
+        const savedPct = wouldBeMs > 0 ? ((saved / wouldBeMs) * 100) : 0;
+        document.getElementById('q5-accum').innerHTML = `
+          <div class="stats-card">總呼叫 <b>${s.calls}</b></div>
+          <div class="stats-card">總時間 <b>${s.totalMs.toFixed(2)}</b> ms</div>
+          <div class="stats-card">平均 <b>${totalAvg.toFixed(3)}</b> ms/call</div>
+          <div class="stats-card" style="background:#d1fae5;">HIT <b>${s.hitCount}</b> 次, 平均 <b>${hitAvg.toFixed(3)}</b> ms</div>
+          <div class="stats-card" style="background:#fee2e2;">MISS <b>${s.missCount}</b> 次, 平均 <b>${missAvg.toFixed(3)}</b> ms</div>
+          ${s.hitCount > 0 && s.missCount > 0 ? `
+            <div class="stats-card" style="background:#fef3c7;">cache 省了約 <b>${saved.toFixed(2)}</b> ms (${savedPct.toFixed(0)}%)</div>
+          ` : ''}
+        `;
+      },
+
+      resetAccumulator() {
+        this.stats = { calls: 0, totalMs: 0, hitMs: 0, hitCount: 0, missMs: 0, missCount: 0 };
+        this._renderAccumulator();
+      },
+
       async refreshHomes() {
         await loadHomesForCity(document.getElementById('q5-city').value, 'q5-home');
       },
+
       async fetch() {
         const homeId = document.getElementById('q5-home').value;
         if (!homeId) return alert('Pick a home');
         const r = await api(`/home/${homeId}`);
         const j = r.json;
+        if (!r.ok) {
+          logTo('q5-log', `GET /home/${homeId}`, { elapsed_ms: 0, ok: false, detail: 'error' });
+          return;
+        }
         const tags = [j.cache_hit ? 'CACHE HIT' : 'CACHE MISS'];
         logTo('q5-log', `GET /home/${homeId}`, {
           elapsed_ms: j.elapsed_ms,
@@ -1378,8 +1449,10 @@
           detail: `${j.cache_hit ? 'served from memory' : 'served from DB, cached for 1h'}`,
           body: j.home,
         });
+        Q5._updateAccumulator(j.elapsed_ms, j.cache_hit);
         await Q5.refreshStats();
       },
+
       async fetchMany(n) {
         const homeId = document.getElementById('q5-home').value;
         if (!homeId) return alert('Pick a home');
@@ -1387,11 +1460,13 @@
           await Q5.fetch();
         }
       },
+
       async clearCache() {
         await api('/api/cache/clear', { method: 'POST' });
         logTo('q5-log', 'CACHE CLEAR', { elapsed_ms: 0, ok: true, detail: 'all entries dropped' });
         await Q5.refreshStats();
       },
+
       async refreshStats() {
         const r = await api('/api/cache/stats');
         const s = r.json;
@@ -1402,6 +1477,76 @@
           <div class="stats-card">hit rate <b>${(s.hit_rate * 100).toFixed(0)}%</b></div>
         `;
         document.getElementById('q5-stats').innerHTML = html;
+      },
+
+      async compareOnOff() {
+        const homeId = document.getElementById('q5-home').value;
+        if (!homeId) return alert('Pick a home');
+        const out = document.getElementById('q5-compare-out');
+        out.innerHTML = '<em>跑對比中... 約 1-3 秒。期間請勿按其他按鈕。</em>';
+
+        // remember original mode so we can restore after
+        const settingsR = await api('/api/settings');
+        const originalCacheMode = settingsR.json.cache_home_detail;
+
+        const runN = async (label, n) => {
+          await api('/api/cache/clear', { method: 'POST' });
+          let total = 0;
+          let hits = 0;
+          let misses = 0;
+          const t0 = performance.now();
+          for (let i = 0; i < n; i++) {
+            const r = await api(`/home/${homeId}`);
+            if (r.json) {
+              total += r.json.elapsed_ms || 0;
+              if (r.json.cache_hit) hits += 1; else misses += 1;
+            }
+          }
+          const wallMs = performance.now() - t0;
+          return { label, n, total, hits, misses, wallMs };
+        };
+
+        // Round 1: cache ON
+        await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ cache_home_detail: true }) });
+        const onR = await runN('cache ON', 100);
+
+        // Round 2: cache OFF
+        await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ cache_home_detail: false }) });
+        const offR = await runN('cache OFF', 100);
+
+        // restore
+        await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ cache_home_detail: originalCacheMode }) });
+        await api('/api/cache/clear', { method: 'POST' });
+        await Q5.refreshStats();
+        await loadSettingsToToggles();
+
+        const ratio = offR.total / Math.max(onR.total, 0.0001);
+        const winner = ratio > 1 ? 'ON' : 'OFF';
+
+        const card = (r, isWinner) => `
+          <div style="flex:1; border:2px solid ${isWinner ? 'var(--ok)' : 'var(--border)'}; border-radius:8px; padding:12px; background:${isWinner ? '#f0fdf4' : 'white'};">
+            <div style="font-weight:600; font-size:13px;">${r.label} ${isWinner ? '🏆' : ''}</div>
+            <div style="font-size:24px; font-weight:700; margin:8px 0;">${r.total.toFixed(2)} <span style="font-size:13px; color:var(--muted);">ms server-side</span></div>
+            <div style="font-size:11.5px; color:var(--muted);">
+              ${r.n} 次呼叫 · 平均 ${(r.total / r.n).toFixed(3)} ms/call<br>
+              hit ${r.hits} / miss ${r.misses}<br>
+              wall-clock (含網路) ${r.wallMs.toFixed(0)} ms
+            </div>
+          </div>
+        `;
+
+        out.innerHTML = `
+          <div style="display:flex; gap:12px; margin-top:8px;">
+            ${card(onR, winner === 'ON')}
+            ${card(offR, winner === 'OFF')}
+          </div>
+          <div style="margin-top:12px; padding:10px 14px; background:#fef3c7; border-radius:4px; font-size:13px;">
+            <b>結論:</b>Cache <b>${winner}</b> 贏,快了 <b>${ratio.toFixed(1)}×</b>。
+            ON 模式下 99/100 次都從記憶體取資料 (HIT),OFF 模式下每次都打 DB (MISS)。
+            真實 Airbnb 規模是這個倍數的更多倍 (因為單次 DB query 含網路、磁碟 IO、TLS 握手),這就是為什麼 home detail 必須 cache。
+          </div>
+          <div class="help" style="margin-top:6px;">原本 cache mode (<b>${originalCacheMode ? 'on' : 'off'}</b>) 已還原,cache 已清空。</div>
+        `;
       },
     };
     document.getElementById('q5-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q5-home'));
@@ -1480,6 +1625,7 @@
       await loadSettingsToToggles();
       await refreshHeaderStats();
       await Q5.refreshStats();
+      Q5._renderAccumulator();
       Q4._resetState();
       setInterval(refreshHeaderStats, 5000);
     })();
