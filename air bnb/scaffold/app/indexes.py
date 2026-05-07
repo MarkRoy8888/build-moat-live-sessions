@@ -13,6 +13,7 @@ CUSTOM_INDEX_NAMES = (
     "idx_inv_compound",
     "idx_inv_covering",
     "idx_inv_partial",
+    "idx_inv_killer",
 )
 
 
@@ -40,9 +41,20 @@ def apply_index_strategy(engine: Engine, strategy: str) -> None:
                     )
                 )
             elif strategy == "partial":
+                # Partial only — does NOT include home_id, so SELECT home_id
+                # still requires a 回表 step to fetch home_id from main table.
                 conn.execute(
                     text(
-                        "CREATE INDEX idx_inv_partial ON inventory(city, date, home_id) "
+                        "CREATE INDEX idx_inv_partial ON inventory(city, date) "
+                        "WHERE status = 'available'"
+                    )
+                )
+            elif strategy == "killer":
+                # Partial + Covering combo: includes home_id (covering) AND
+                # only indexes available rows (partial). Smallest index, no 回表.
+                conn.execute(
+                    text(
+                        "CREATE INDEX idx_inv_killer ON inventory(city, date, home_id) "
                         "WHERE status = 'available'"
                     )
                 )

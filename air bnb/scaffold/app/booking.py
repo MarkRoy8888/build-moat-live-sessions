@@ -9,7 +9,8 @@ Two modes for didactic comparison:
 
 from datetime import date, datetime, timedelta
 from secrets import token_hex
-from time import sleep
+from threading import Lock
+from time import sleep, time
 
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, IntegrityError
@@ -17,6 +18,30 @@ from sqlalchemy.orm import Session
 
 from .models import Booking, WebhookEvent
 from .settings import settings
+
+
+# Process-wide lock used to simulate the (a) Pessimistic Lock anti-pattern
+# in Q2 unlock_mode='pessimistic'. Holding this for the full TTL means
+# every other reservation request blocks waiting for it — exactly the
+# 'DB lock across human time' failure mode the lecture warns about.
+_PESSIMISTIC_LOCK = Lock()
+_pessimistic_state = {"holder": None, "since": None, "until": None}
+
+
+def pessimistic_lock_state() -> dict:
+    """Read-only snapshot for UI: who's holding the pessimistic lock and how long left."""
+    holder = _pessimistic_state["holder"]
+    until = _pessimistic_state["until"]
+    if not holder or not until:
+        return {"held": False}
+    remaining = max(0.0, until - time())
+    return {
+        "held": True,
+        "holder": holder,
+        "since": _pessimistic_state["since"],
+        "until": until,
+        "remaining_seconds": round(remaining, 2),
+    }
 
 
 def _nights(start: date, end: date) -> int:
@@ -45,6 +70,20 @@ def try_reserve(
     booking_id = "B_" + token_hex(8)
 
     try:
+        # Q2 unlock-mode demo dispatch. unlock_mode trumps concurrency_mode
+        # because pessimistic / cron-strict are entirely different SQL flows.
+        if settings.unlock_mode == "pessimistic":
+            return _reserve_pessimistic(
+                db, home_id, user_id, start_date, end_date,
+                nights, now, expires_at, booking_id,
+            )
+        if settings.unlock_mode == "cron":
+            return _reserve_strict(
+                db, home_id, user_id, start_date, end_date,
+                nights, now, expires_at, booking_id,
+            )
+        # unlock_mode == 'logical' (default) → fall through to existing
+        # naive/logical concurrency mode dispatch
         if settings.concurrency_mode == "naive":
             return _reserve_naive(
                 db,
@@ -122,6 +161,129 @@ def _reserve_logical(
     db.commit()
     db.refresh(booking)
     return booking, "OK"
+
+
+def _reserve_strict(
+    db, home_id, user_id, start_date, end_date, nights, now, expires_at, booking_id
+):
+    """Cron-sweep unlock mode: only physically 'available' rows are bookable.
+
+    No logical OR for expired-reserved. If a previous reservation expired but
+    cron hasn't swept it yet, this booking attempt is rejected — even though
+    logically the row is free. Demonstrates why having cron on the critical
+    path is dangerous (cron downtime = system effectively halted).
+    """
+    update_sql = text(
+        """
+        UPDATE inventory
+        SET status = 'reserved',
+            holder = :holder,
+            expires_at = :expires_at
+        WHERE home_id = :home_id
+          AND date BETWEEN :start AND :end
+          AND status = 'available'
+        """
+    )
+    result = db.execute(
+        update_sql,
+        {
+            "holder": booking_id,
+            "expires_at": expires_at,
+            "home_id": home_id,
+            "start": start_date,
+            "end": end_date,
+        },
+    )
+    if result.rowcount != nights:
+        db.rollback()
+        return None, (
+            f"Strict mode: only {result.rowcount}/{nights} rows are physically "
+            f"'available'. Expired holds wait for cron sweep to be unlocked."
+        )
+    booking = Booking(
+        id=booking_id, home_id=home_id, user_id=user_id,
+        start_date=start_date, end_date=end_date,
+        status="reserved", created_at=now, expires_at=expires_at,
+    )
+    db.add(booking)
+    db.commit()
+    db.refresh(booking)
+    return booking, "OK (strict — cron must sweep expired rows for them to unlock)"
+
+
+def _reserve_pessimistic(
+    db, home_id, user_id, start_date, end_date, nights, now, expires_at, booking_id
+):
+    """Pessimistic lock anti-pattern demo.
+
+    Acquires a process-wide Python Lock and holds it for the full TTL.
+    Every other reservation attempt — regardless of which home/dates — will
+    block on this lock. This simulates 'SELECT FOR UPDATE held through the
+    entire payment window', the textbook approach that destroys throughput
+    in production.
+
+    To make the demo timely, we still use the configured TTL (default 10s
+    when running the demo). After the lock is held for the TTL, we release
+    it; the reservation row remains 'reserved' with the original expires_at.
+    """
+    ttl = settings.reservation_ttl_seconds
+    acquired = _PESSIMISTIC_LOCK.acquire(timeout=max(ttl + 5, 30))
+    if not acquired:
+        return None, "Pessimistic lock contention timeout — system already saturated"
+
+    try:
+        _pessimistic_state.update({
+            "holder": booking_id,
+            "since": time(),
+            "until": time() + ttl,
+        })
+
+        # Quick check + write under the lock (instant SQL, then long sleep)
+        update_sql = text(
+            """
+            UPDATE inventory
+            SET status = 'reserved',
+                holder = :holder,
+                expires_at = :expires_at
+            WHERE home_id = :home_id
+              AND date BETWEEN :start AND :end
+              AND status = 'available'
+            """
+        )
+        result = db.execute(
+            update_sql,
+            {
+                "holder": booking_id,
+                "expires_at": expires_at,
+                "home_id": home_id,
+                "start": start_date,
+                "end": end_date,
+            },
+        )
+        if result.rowcount != nights:
+            db.rollback()
+            return None, (
+                f"Pessimistic mode: only {result.rowcount}/{nights} rows available."
+            )
+        booking = Booking(
+            id=booking_id, home_id=home_id, user_id=user_id,
+            start_date=start_date, end_date=end_date,
+            status="reserved", created_at=now, expires_at=expires_at,
+        )
+        db.add(booking)
+        db.commit()
+        db.refresh(booking)
+
+        # Now hold the lock for the full TTL — simulating 'wait for user to pay'.
+        # Other reservation requests are blocked at acquire() during this time.
+        sleep(ttl)
+        return booking, (
+            f"OK (pessimistic — held lock for {ttl}s, blocking all other "
+            "reservations). This is the anti-pattern."
+        )
+    finally:
+        _pessimistic_state.update({"holder": None, "since": None, "until": None})
+        _PESSIMISTIC_LOCK.release()
 
 
 def _reserve_naive(

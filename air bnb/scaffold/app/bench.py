@@ -16,7 +16,7 @@ from .indexes import apply_index_strategy
 from .schemas import BenchResult
 from .search import search_homes
 
-STRATEGIES = ["none", "simple", "compound", "covering", "partial"]
+STRATEGIES = ["none", "simple", "compound", "covering", "partial", "killer"]
 
 
 def _bench_one(db: Session, runs: int, city: str, start: date, end: date) -> tuple[float, float, float]:

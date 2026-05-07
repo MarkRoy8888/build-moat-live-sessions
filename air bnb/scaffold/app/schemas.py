@@ -78,6 +78,8 @@ class SettingsResponse(BaseModel):
     concurrency_mode: str
     idempotency_enforced: bool
     reservation_ttl_seconds: int
+    unlock_mode: str
+    cron_interval_seconds: int
 
 
 class SettingsUpdate(BaseModel):
@@ -86,6 +88,8 @@ class SettingsUpdate(BaseModel):
     concurrency_mode: str | None = None
     idempotency_enforced: bool | None = None
     reservation_ttl_seconds: int | None = Field(None, ge=5, le=3600)
+    unlock_mode: str | None = None
+    cron_interval_seconds: int | None = Field(None, ge=1, le=60)
 
 
 class ExplainResponse(BaseModel):

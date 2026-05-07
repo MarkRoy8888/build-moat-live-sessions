@@ -16,8 +16,9 @@ class Settings:
         # 'none'      -> drop all custom indexes (full scan)
         # 'simple'    -> single-column index on city
         # 'compound'  -> (city, date, status)
-        # 'covering'  -> (city, date, status, home_id)
-        # 'partial'   -> (city, date, home_id) WHERE status='available'
+        # 'covering'  -> (city, date, status, home_id) — covering only
+        # 'partial'   -> (city, date) WHERE status='available' — partial only (回表)
+        # 'killer'    -> (city, date, home_id) WHERE status='available' — partial+covering
         self.index_strategy: str = "compound"
 
         # Q5: cache home detail in memory?
@@ -27,6 +28,21 @@ class Settings:
         # 'logical'  -> conditional UPDATE with logical availability check (recommended)
         # 'naive'    -> SELECT then UPDATE (race condition demonstration)
         self.concurrency_mode: str = "logical"
+
+        # Q2 demo: how does an expired reservation get released?
+        # 'pessimistic' -> hold a process-wide lock for the full TTL, blocking
+        #                  any other reservation attempt (anti-pattern demo)
+        # 'cron'        -> reservation only releases when the background cron
+        #                  sweep runs; reservations strictly require status=
+        #                  'available' (cron is on the critical path)
+        # 'logical'     -> next booker self-services takeover via conditional
+        #                  UPDATE that accepts (reserved AND expired); cron is
+        #                  optional janitor only
+        self.unlock_mode: str = "logical"
+
+        # Background cron interval for the cron-sweep demo. Long enough that
+        # users can see the gap between TTL expiry and cron sweep.
+        self.cron_interval_seconds: int = 5
 
         # Q4: enforce idempotency on confirm endpoint?
         self.idempotency_enforced: bool = True
@@ -41,11 +57,14 @@ class Settings:
             "concurrency_mode": self.concurrency_mode,
             "idempotency_enforced": self.idempotency_enforced,
             "reservation_ttl_seconds": self.reservation_ttl_seconds,
+            "unlock_mode": self.unlock_mode,
+            "cron_interval_seconds": self.cron_interval_seconds,
         }
 
     def update(self, **kwargs):
-        valid_index = {"none", "simple", "compound", "covering", "partial"}
+        valid_index = {"none", "simple", "compound", "covering", "partial", "killer"}
         valid_concurrency = {"logical", "naive"}
+        valid_unlock = {"pessimistic", "cron", "logical"}
 
         with self._lock:
             if "index_strategy" in kwargs:
@@ -67,6 +86,16 @@ class Settings:
                 if ttl < 5 or ttl > 3600:
                     raise ValueError("reservation_ttl_seconds must be between 5 and 3600")
                 self.reservation_ttl_seconds = ttl
+            if "unlock_mode" in kwargs:
+                v = kwargs["unlock_mode"]
+                if v not in valid_unlock:
+                    raise ValueError(f"unlock_mode must be one of {valid_unlock}")
+                self.unlock_mode = v
+            if "cron_interval_seconds" in kwargs:
+                iv = int(kwargs["cron_interval_seconds"])
+                if iv < 1 or iv > 60:
+                    raise ValueError("cron_interval_seconds must be between 1 and 60")
+                self.cron_interval_seconds = iv
 
 
 settings = Settings()

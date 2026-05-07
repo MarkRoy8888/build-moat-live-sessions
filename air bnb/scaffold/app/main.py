@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from .cron import cron_sweeper
 from .database import Base, SessionLocal, engine
 from .indexes import apply_index_strategy
 from .routes import router
@@ -20,6 +21,7 @@ def _bootstrap():
     finally:
         db.close()
     apply_index_strategy(engine, settings.index_strategy)
+    cron_sweeper.start()
 
 
 _bootstrap()

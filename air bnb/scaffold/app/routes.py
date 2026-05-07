@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .booking import cancel_booking, confirm_payment, finalize_booking, try_reserve
+from .booking import (
+    cancel_booking,
+    confirm_payment,
+    finalize_booking,
+    pessimistic_lock_state,
+    try_reserve,
+)
+from .cron import cron_sweeper
 from .cache import home_cache
 from .database import engine, get_db
 from .indexes import apply_index_strategy, explain_search
@@ -293,6 +300,31 @@ def http_update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
         home_cache.clear()
 
     return SettingsResponse(**settings.to_dict())
+
+
+@router.get("/api/q2/cron/stats")
+def http_cron_stats():
+    return cron_sweeper.stats()
+
+
+@router.post("/api/q2/cron/trigger")
+def http_cron_trigger():
+    """Manually fire one cron sweep right now (independent of the timer)."""
+    swept = cron_sweeper.sweep_once()
+    return {"swept": swept, **cron_sweeper.stats()}
+
+
+@router.post("/api/q2/cron/toggle")
+def http_cron_toggle(enabled: bool = True):
+    """Enable or disable the background cron loop. Useful in cron mode to
+    show 'system halts when cron is down'."""
+    cron_sweeper.enabled = bool(enabled)
+    return {"enabled": cron_sweeper.enabled}
+
+
+@router.get("/api/q2/pessimistic/state")
+def http_pessimistic_state():
+    return pessimistic_lock_state()
 
 
 @router.get("/api/cache/stats")

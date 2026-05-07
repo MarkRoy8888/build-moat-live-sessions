@@ -483,6 +483,97 @@
           <div class="log" id="q2-log-b"></div>
         </div>
       </div>
+
+      <div class="question" style="margin-top:18px;">
+        <h2>🔓 Q2 進階 Demo:三種「解鎖機制」現場對比</h2>
+        <p>同樣是「reserve 後 10 秒過期」,釋放方式有三種設計,各自的故障模式不一樣。
+          這個 demo 把 TTL 設成 10 秒,你可以親眼看到差別。</p>
+        <div class="observe">
+          <b>怎麼測 (3 個 mode 都跑一遍):</b><br>
+          1. 上方按 <b>① Set TTL = 10s</b>(只設一次)<br>
+          2. 切 mode → 按 <b>A reserves 10s hold</b><br>
+          3. <b>立刻</b>按 <b>B tries same dates</b> 看當下行為<br>
+          4. <b>等 10 秒之後</b>再按一次 B 看「解鎖後」的行為<br>
+          <br>
+          <b>三種 mode 的預期差異:</b><br>
+          🔒 <b>pessimistic</b>:A 的 reserve 自己會 hang 10 秒。期間 B 的 reserve 也會 hang(被 process-wide lock 擋)。10 秒後 A 跟 B 都返回 — 但 B 必失敗(A 已經佔住房)。<b>整個系統等於停 10 秒</b>。<br>
+          ⏳ <b>cron</b>:A 立即返回。B 立刻試 → reject。<b>等 10 秒過 TTL,B 立刻試</b> → 仍 reject (cron 還沒跑)。<b>等到 cron 跑過後再試</b> → 成功。可以按 <b>Disable cron</b> 模擬 cron 掛掉,B 永遠 reject。<br>
+          🟢 <b>logical (正解)</b>:A 立即返回。B 立刻試 → reject。<b>過 10 秒立刻試</b> → 成功(下一個 booking 自己 take over,不靠 cron)。
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>① Unlock Mode 設定</h3>
+        <div class="toggle" id="q2-unlock-toggle">
+          <button data-value="pessimistic">🔒 pessimistic (反模式)</button>
+          <button data-value="cron">⏳ cron (cron 在關鍵路徑)</button>
+          <button data-value="logical">🟢 logical (推薦)</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>TTL (秒)</label>
+            <input type="number" id="q2-demo-ttl" value="10" min="5" max="60" />
+          </div>
+          <div style="display:flex; align-items:end;">
+            <button class="secondary" onclick="Q2Demo.setTtl()">① Set TTL</button>
+          </div>
+          <div>
+            <label>Cron 間隔 (秒,只 cron mode 用)</label>
+            <input type="number" id="q2-demo-cron-iv" value="5" min="1" max="60" />
+          </div>
+          <div style="display:flex; align-items:end;">
+            <button class="secondary" onclick="Q2Demo.setCron()">設 cron 間隔</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>② 跑 Demo</h3>
+        <div class="row">
+          <div>
+            <label>City</label>
+            <select id="q2-demo-city"></select>
+          </div>
+          <div>
+            <label>Home</label>
+            <select id="q2-demo-home"></select>
+          </div>
+          <div>
+            <label>Start</label>
+            <input type="date" id="q2-demo-start" />
+          </div>
+          <div>
+            <label>End</label>
+            <input type="date" id="q2-demo-end" />
+          </div>
+        </div>
+        <div class="button-row">
+          <button class="primary-blue" onclick="Q2Demo.aReserve()">A reserves (10s hold)</button>
+          <button class="primary-pink" onclick="Q2Demo.bTry()">B tries same dates (隨時可按)</button>
+          <button class="secondary" onclick="Q2Demo.cancelAll()">Reset (cancel & free)</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>③ Cron + Pessimistic 即時狀態</h3>
+        <div id="q2-demo-state" style="font-size:12px;"></div>
+        <div class="button-row" style="margin-top:6px;">
+          <button class="secondary" onclick="Q2Demo.cronTrigger()">手動觸發 cron sweep</button>
+          <button class="secondary" onclick="Q2Demo.cronToggle(false)">⏸ Disable cron</button>
+          <button class="secondary" onclick="Q2Demo.cronToggle(true)">▶ Enable cron</button>
+        </div>
+      </div>
+
+      <div class="users-grid">
+        <div class="panel user-a">
+          <h3><span class="dot"></span> A demo log</h3>
+          <div class="log" id="q2-demo-log-a"></div>
+        </div>
+        <div class="panel user-b">
+          <h3><span class="dot"></span> B demo log</h3>
+          <div class="log" id="q2-demo-log-b"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ==================== Q3 ==================== -->
@@ -514,15 +605,22 @@
       </div>
 
       <div class="panel">
-        <h3>① 切換 Index Strategy</h3>
+        <h3>① 切換 Index Strategy (6 種)</h3>
         <div class="toggle" id="q3-toggle">
           <button data-value="none">none (沒 index)</button>
           <button data-value="simple">simple (只對 city)</button>
           <button data-value="compound">compound (city, date, status)</button>
-          <button data-value="covering">covering (+home_id)</button>
-          <button data-value="partial">partial (WHERE status='available')</button>
+          <button data-value="covering">covering (+home_id, 不回表)</button>
+          <button data-value="partial">partial (WHERE available, 仍要回表)</button>
+          <button data-value="killer">🔥 killer (partial+covering 疊加)</button>
         </div>
-        <div class="help">切換時會自動 DROP 舊 index + CREATE 新 index + dispose 連線池(讓 EXPLAIN 立即生效)</div>
+        <div class="help">
+          <b>5 種策略的進階關係:</b><br>
+          • <b>covering</b> = compound + 把 home_id 塞進 index → 不回表<br>
+          • <b>partial</b> = 末尾加 <code>WHERE status='available'</code> → 只 50% rows 進 index,但 SELECT home_id 仍要回表<br>
+          • <b>🔥 killer</b> = partial + 在 index 裡多塞 home_id → <b>體積最小、寫入最便宜、不回表</b> = production 真實會用的招<br>
+          切換時會 DROP 舊 index + CREATE 新 index + dispose 連線池。
+        </div>
       </div>
 
       <div class="panel">
@@ -928,6 +1026,7 @@
       const s = r.json;
       const map = {
         'q2-toggle': s.concurrency_mode,
+        'q2-unlock-toggle': s.unlock_mode,
         'q3-toggle': s.index_strategy,
         'q4-toggle': String(s.idempotency_enforced),
         'q5-toggle': String(s.cache_home_detail),
@@ -938,6 +1037,10 @@
         });
       });
       document.getElementById('admin-ttl').value = s.reservation_ttl_seconds;
+      const ttlEl = document.getElementById('q2-demo-ttl');
+      if (ttlEl) ttlEl.value = s.reservation_ttl_seconds;
+      const civEl = document.getElementById('q2-demo-cron-iv');
+      if (civEl) civEl.value = s.cron_interval_seconds;
     }
 
     bindToggle('q2-toggle', 'concurrency_mode');
@@ -1117,6 +1220,146 @@
       },
     };
     document.getElementById('q2-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q2-home'));
+
+    // ===== Q2 Demo: three unlock mechanisms =====
+    const Q2Demo = {
+      lastABooking: null,
+
+      async setTtl() {
+        const v = parseInt(document.getElementById('q2-demo-ttl').value) || 10;
+        await api('/api/settings', {
+          method: 'PATCH',
+          body: JSON.stringify({ reservation_ttl_seconds: v }),
+        });
+        await loadSettingsToToggles();
+        Q2Demo._renderState(`TTL 已設為 ${v} 秒`);
+      },
+
+      async setCron() {
+        const v = parseInt(document.getElementById('q2-demo-cron-iv').value) || 5;
+        await api('/api/settings', {
+          method: 'PATCH',
+          body: JSON.stringify({ cron_interval_seconds: v }),
+        });
+        Q2Demo._renderState(`Cron 間隔已設為 ${v} 秒`);
+      },
+
+      async aReserve() {
+        const homeId = document.getElementById('q2-demo-home').value;
+        const start = document.getElementById('q2-demo-start').value;
+        const end = document.getElementById('q2-demo-end').value;
+        if (!homeId) return alert('Pick a home');
+        const t0 = performance.now();
+        const r = await api('/home/book', {
+          method: 'POST',
+          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_DEMO_A' }),
+        });
+        const wallMs = performance.now() - t0;
+        const j = r.json || {};
+        if (j.booking_id) Q2Demo.lastABooking = j.booking_id;
+        const settingsR = await api('/api/settings');
+        const mode = settingsR.json.unlock_mode;
+        logTo('q2-demo-log-a', `[${mode}] A RESERVE ${homeId}`, {
+          elapsed_ms: wallMs,
+          ok: r.ok && j.status === 'reserved',
+          tags: [`server ${j.elapsed_ms}ms`, `wall ${wallMs.toFixed(0)}ms`],
+          detail: `status=${j.status} ${j.detail || ''}`,
+          body: j,
+        });
+        Admin.refreshBookings();
+      },
+
+      async bTry() {
+        const homeId = document.getElementById('q2-demo-home').value;
+        const start = document.getElementById('q2-demo-start').value;
+        const end = document.getElementById('q2-demo-end').value;
+        if (!homeId) return alert('Pick a home');
+        const t0 = performance.now();
+        const r = await api('/home/book', {
+          method: 'POST',
+          body: JSON.stringify({ home_id: homeId, start_date: start, end_date: end, user_id: 'U_DEMO_B' }),
+        });
+        const wallMs = performance.now() - t0;
+        const j = r.json || {};
+        const settingsR = await api('/api/settings');
+        const mode = settingsR.json.unlock_mode;
+        logTo('q2-demo-log-b', `[${mode}] B TRY ${homeId}`, {
+          elapsed_ms: wallMs,
+          ok: r.ok && j.status === 'reserved',
+          tags: [`server ${j.elapsed_ms}ms`, `wall ${wallMs.toFixed(0)}ms`],
+          detail: `status=${j.status} — ${j.detail || ''}`,
+          body: j,
+        });
+        Admin.refreshBookings();
+      },
+
+      async cancelAll() {
+        const homeId = document.getElementById('q2-demo-home').value;
+        if (!homeId) return;
+        const r = await api('/api/bookings');
+        const targets = (r.json || []).filter(b =>
+          b.home_id === homeId &&
+          (b.user_id === 'U_DEMO_A' || b.user_id === 'U_DEMO_B') &&
+          b.status !== 'booked' && b.status !== 'cancelled'
+        );
+        for (const b of targets) {
+          await api(`/home/book/${b.id}/cancel`, { method: 'POST' });
+        }
+        Q2Demo.lastABooking = null;
+        logTo('q2-demo-log-a', 'CANCEL ALL DEMO', {
+          elapsed_ms: 0, ok: true, detail: `released ${targets.length} demo bookings`
+        });
+        Admin.refreshBookings();
+      },
+
+      async cronTrigger() {
+        const r = await api('/api/q2/cron/trigger', { method: 'POST' });
+        Q2Demo._renderStateFromData(r.json);
+      },
+
+      async cronToggle(enabled) {
+        await api(`/api/q2/cron/toggle?enabled=${enabled}`, { method: 'POST' });
+        Q2Demo._renderState(enabled ? 'Cron enabled' : '⚠ Cron disabled — 任何 cron mode 下的過期 row 不會被清掉');
+      },
+
+      _renderState(msg) {
+        const el = document.getElementById('q2-demo-state');
+        if (msg) el.innerHTML = `<div style="margin-bottom:6px;">${msg}</div>` + (el.innerHTML.split('<hr')[1] ? '<hr/>' + el.innerHTML.split('<hr')[1] : '');
+        Q2Demo._refreshLive();
+      },
+
+      _renderStateFromData(stats) {
+        if (!stats) return;
+        const last = stats.last_run_seconds_ago != null ? `${stats.last_run_seconds_ago.toFixed(1)}s 前` : '尚未跑過';
+        document.getElementById('q2-demo-state').innerHTML = `
+          <div><b>Cron:</b> ${stats.enabled ? '✅ 啟用' : '⏸ 停用'} · 間隔 ${stats.interval_seconds}s · 上次 ${last} · 上次掃 <b>${stats.last_sweep_count}</b> 筆 · 累計 <b>${stats.total_swept}</b> 筆</div>
+        `;
+      },
+
+      async _refreshLive() {
+        const cron = await api('/api/q2/cron/stats');
+        const pess = await api('/api/q2/pessimistic/state');
+        const cs = cron.json || {};
+        const ps = pess.json || {};
+        const cronLine = `<b>Cron:</b> ${cs.enabled ? '✅ 啟用' : '⏸ 停用'} · 間隔 ${cs.interval_seconds}s · 上次 ${cs.last_run_seconds_ago != null ? cs.last_run_seconds_ago.toFixed(1) + 's 前' : '尚未'} · 上次掃 <b>${cs.last_sweep_count}</b> 筆 · 累計 <b>${cs.total_swept}</b> 筆`;
+        const pessLine = ps.held
+          ? `<b style="color:var(--err);">🔒 Pessimistic lock 持有中</b> · holder=${ps.holder} · 剩餘 <b>${ps.remaining_seconds}</b>s`
+          : `<b>Pessimistic lock:</b> 未持有`;
+        document.getElementById('q2-demo-state').innerHTML = `<div>${cronLine}</div><div>${pessLine}</div>`;
+      },
+    };
+
+    // bind unlock mode toggle (was missing because not in original bindToggle init)
+    bindToggle('q2-unlock-toggle', 'unlock_mode');
+
+    // q2 demo home dropdown follows q2 city
+    document.getElementById('q2-demo-city').addEventListener('change', e => loadHomesForCity(e.target.value, 'q2-demo-home'));
+
+    // poll cron + pessimistic state every 1.5s while Q2 tab open
+    setInterval(() => {
+      const tab = document.getElementById('tab-q2');
+      if (tab && tab.classList.contains('active')) Q2Demo._refreshLive();
+    }, 1500);
 
     // ===== Q3 =====
     const Q3 = {
@@ -1604,7 +1847,7 @@
 
     async function refreshAllHomeLists() {
       // re-populate every tab's home dropdown for its current city
-      for (const id of ['q1', 'q2', 'q3', 'q4', 'q5']) {
+      for (const id of ['q1', 'q2', 'q3', 'q4', 'q5', 'q2-demo']) {
         const cityEl = document.getElementById(`${id}-city`);
         const homeEl = document.getElementById(`${id}-home`);
         if (cityEl && homeEl) {
@@ -1615,10 +1858,10 @@
 
     // ===== Init =====
     (async function init() {
-      ['q1', 'q2', 'q3', 'q4', 'q5'].forEach(id => {
+      ['q1', 'q2', 'q3', 'q4', 'q5', 'q2-demo'].forEach(id => {
         fillCities(`${id}-city`);
       });
-      ['q2', 'q3', 'q4'].forEach(id => {
+      ['q2', 'q3', 'q4', 'q2-demo'].forEach(id => {
         fillDates(`${id}-start`, `${id}-end`);
       });
       await refreshAllHomeLists();
